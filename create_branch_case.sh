@@ -18,7 +18,8 @@ set -euo pipefail
 #                        job begin/end/fail (BATCH_MAIL_TO/BATCH_MAIL_TYPE);
 #                        if unset, no mail xmlchange calls are made.
 #
-# On success, prints "CASEDIR=<path>" as the last line of stdout.
+# Creates, configures and *builds* the case. On success, prints
+# "CASEDIR=<path>" as the last line of stdout.
 # Set DRY_RUN=1 to print the commands that would run instead of executing them.
 
 : "${ENS:?ENS is required}"
@@ -37,13 +38,26 @@ CASEROOT="${CASEROOT:-/glade/work/walkerl/cases}"
 SCRATCHROOT="${SCRATCHROOT:-/glade/derecho/scratch/walkerl}"
 NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
 
-BRANCH_SUFFIX=$(printf "%03d" "$BRANCH_NUMBER")
-RUNNAME="b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.${ENS}.branch.${BRANCH_SUFFIX}"
+# 10# forces base-10: an already-zero-padded BRANCH_NUMBER like "009" would
+# otherwise be parsed as octal (and "008"/"009" are invalid octal, a hard error).
+BRANCH_SUFFIX=$(printf "%03d" "$((10#$BRANCH_NUMBER))")
+RUNNAME="b.e21.${COMPSET}.${RESOLN}.ENSO_JJASONDJF_375cm3.${ENS}.branch.${BRANCH_SUFFIX}"
 
 CASEDIR="$CASEROOT/$RUNNAME"
 RUNDIR="$SCRATCHROOT/$RUNNAME/run"
 ARCHIVEDIR="$SCRATCHROOT/archive/$RUNNAME/"
 ICSDIR="$SCRATCHROOT/archive/$REFCASE/rest/${STARTDATE}-00000"
+
+# Fail before mutating anything if the case directory already exists. This
+# script is not resumable: a re-run against a half-created case would
+# otherwise die deep inside CIME with a confusing error.
+if [ -e "$CASEDIR" ]; then
+  echo "ERROR: case directory already exists: $CASEDIR" >&2
+  echo "       This script cannot resume a partially-created case. Inspect it," >&2
+  echo "       and if it is an incomplete leftover, 'rm -rf $CASEDIR' (and the" >&2
+  echo "       matching run directory $RUNDIR) before retrying." >&2
+  exit 1
+fi
 
 run() {
   if [ "${DRY_RUN:-0}" = "1" ]; then
@@ -81,6 +95,11 @@ echo "##### setting up case $RUNNAME #####"
   run ./xmlchange STOP_N="$STOP_N"
   run ./xmlchange STOP_OPTION=nmonths
   run ./xmlchange RESUBMIT=0
+  # Monthly restarts. The next MCB branch case branches from the June 1
+  # restart of a RUNNING segment; with only the default end-of-segment
+  # restart, no June 1 restart file would ever exist to copy from.
+  run ./xmlchange REST_OPTION=nmonths
+  run ./xmlchange REST_N=1
 
   if [ -n "$NOTIFICATION_EMAIL" ]; then
     run ./xmlchange BATCH_MAIL_TO="$NOTIFICATION_EMAIL"
@@ -104,7 +123,13 @@ MCB_seeding_amt = 1
 EOF
     fi
   fi
+
+  # Build the case here: nothing else in the automated chain ever calls
+  # case.build, and case.submit on an unbuilt case fails. This is the slow
+  # step (20-30 minutes for a real CESM2 build) and the orchestrator blocks
+  # on it — see the walltime note in orchestrator_wrapper.sh.
+  run ./case.build
 )
 
-echo "##### script finished, ready to build #####"
+echo "##### script finished, case built #####"
 echo "CASEDIR=$CASEDIR"
