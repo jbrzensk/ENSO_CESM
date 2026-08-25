@@ -721,7 +721,7 @@ Run:
 chmod +x create_branch_case.sh
 .venv/bin/pytest tests/test_create_branch_case.py -v
 ```
-Expected: PASS (6 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -938,7 +938,7 @@ def _resubmit_next_year(state: CycleState, end_year: int) -> Transition:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_enso_mcb_decision.py -v`
-Expected: PASS (9 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -1244,7 +1244,7 @@ def submit_orchestrator_self(wrapper_script: str, depend_job_id: str, state_file
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_enso_mcb_jobs.py -v`
-Expected: PASS (11 tests)
+Expected: PASS (12 tests)
 
 - [ ] **Step 5: Commit**
 
