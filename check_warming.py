@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 
+import numpy as np
 import xarray as xr
 
 NINO34_LAT_BOUNDS = (-5.0, 5.0)
@@ -26,8 +27,20 @@ def compute_nino34_sst(history_file: str, sst_var: str = "SST",
     if "z_t" in sst.dims:
         sst = sst.isel(z_t=0)
     area = ds[area_var].where(mask)
-    weighted_mean = (sst.where(mask) * area).sum() / area.sum()
-    return float(weighted_mean.values)
+    total_area = area.sum().values
+    if total_area == 0:
+        raise ValueError(
+            f"Nino3.4 region mask matched no grid cells in {history_file} — "
+            "check lat/lon variable names and box bounds"
+        )
+    weighted_mean = (sst.where(mask) * area).sum() / total_area
+    result = float(weighted_mean.values)
+    if not np.isfinite(result):
+        raise ValueError(
+            f"Nino3.4 SST computation produced non-finite value ({result}) "
+            f"from {history_file} — check data quality and variable names"
+        )
+    return result
 
 
 def compute_anomaly(sst_value: float, climatology_value: float) -> float:
