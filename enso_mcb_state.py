@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import os
+from typing import Optional
 
 
 class Stage:
@@ -18,6 +19,11 @@ class CycleState:
     stage: str
     branch_number: int
     year: int
+    # Recovery breadcrumbs, only set when the orchestrator marks a lineage
+    # FAILED. Both default so state files written before these fields existed
+    # still load through CycleState(**data).
+    failed_from_stage: Optional[str] = None
+    failure_reason: Optional[str] = None
 
 
 def load_state(path: str) -> CycleState:

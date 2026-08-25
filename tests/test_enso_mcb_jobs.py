@@ -13,6 +13,27 @@ class FakeCompletedProcess:
         self.returncode = returncode
 
 
+def make_fake_run(calls, handler=None):
+    """Build a subprocess.run stand-in matching how enso_mcb_jobs calls it."""
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        calls.append((cmd, cwd))
+        if handler is not None:
+            return handler(cmd, cwd, env)
+        return FakeCompletedProcess()
+
+    return fake_run
+
+
+CREATE_BRANCH_ARGS = (
+    "create_branch_case.sh", "1051", "refcase-1", 9, "2054-06-01", 3, True,
+    "/glade/work/walkerl/cases", "walkerl@example.edu",
+    "f09_g17", "BSSP370smbb", "UCSD0083",
+    "/glade/work/walkerl/MCB_mods", "/glade/work/walkerl/cesm_tags/cesm2.1.5",
+    "/glade/derecho/scratch/walkerl",
+)
+
+
 def test_parse_last_job_id_extracts_numeric_id():
     assert jobs.parse_last_job_id("12345.desched1\n") == "12345"
 
@@ -27,33 +48,91 @@ def test_parse_last_job_id_raises_on_unparseable_line():
         jobs.parse_last_job_id("submission failed\n")
 
 
-def test_submit_case_returns_parsed_job_id(monkeypatch):
-    def fake_run(cmd, cwd, capture_output, text, check):
-        assert cmd == ["./case.submit"]
-        assert cwd == "/fake/case"
-        return FakeCompletedProcess(stdout="Submitted job: 55555.derecho\n")
+def test_parse_last_job_id_prefers_archive_line_over_later_lines():
+    output = (
+        "Submitting job script case.run\n"
+        "Submitted job case.run with id 12345.desched1\n"
+        "Submitting job script case.st_archive\n"
+        "Submitted job case.st_archive with id 12346.desched1\n"
+        "Submitted job case.run with id 12345.desched1\n"
+    )
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    # The archive job's ID wins even though it is not the last line: depending
+    # on the run job would let the orchestrator start before archiving is done.
+    assert jobs.parse_last_job_id(output) == "12346"
+
+
+def test_parse_last_job_id_uses_archive_line_when_it_is_last():
+    output = (
+        "Submitted job case.run with id 12345.desched1\n"
+        "Submitted job case.st_archive with id 12346.desched1\n"
+    )
+
+    assert jobs.parse_last_job_id(output) == "12346"
+
+
+def test_parse_last_job_id_falls_back_to_last_line_without_archive_line():
+    output = "Submitting job script case.run\n55555.desched1\n"
+
+    assert jobs.parse_last_job_id(output) == "55555"
+
+
+def test_submit_case_returns_parsed_job_id(monkeypatch):
+    calls = []
+    monkeypatch.setattr(subprocess, "run", make_fake_run(
+        calls, lambda cmd, cwd, env: FakeCompletedProcess(
+            stdout="Submitted job: 55555.derecho\n"),
+    ))
 
     assert jobs.submit_case("/fake/case") == "55555"
+    assert calls == [(["./case.submit"], "/fake/case")]
 
 
-def test_resubmit_case_sets_stop_n_then_submits(monkeypatch):
+def test_resubmit_case_sets_stop_n_and_continue_run_then_submits(monkeypatch):
     calls = []
 
-    def fake_run(cmd, cwd=None, check=None, capture_output=False, text=False):
-        calls.append(cmd)
+    def handler(cmd, cwd, env):
         if cmd[0] == "./case.submit":
             return FakeCompletedProcess(stdout="99999.derecho\n")
         return FakeCompletedProcess()
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls, handler))
 
     job_id = jobs.resubmit_case("/fake/case", 12)
 
-    assert calls[0] == ["./xmlchange", "STOP_N=12"]
-    assert calls[1] == ["./case.submit"]
+    assert [cmd for cmd, _ in calls] == [
+        ["./xmlchange", "STOP_N=12"],
+        ["./xmlchange", "CONTINUE_RUN=TRUE"],
+        ["./case.submit"],
+    ]
+    assert all(cwd == "/fake/case" for _, cwd in calls)
     assert job_id == "99999"
+
+
+def test_set_continue_run_false_sets_false(monkeypatch):
+    calls = []
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
+
+    jobs.set_continue_run("/fake/case", False)
+
+    assert calls == [(["./xmlchange", "CONTINUE_RUN=FALSE"], "/fake/case")]
+
+
+def test_configure_case_for_orchestration_forces_pipeline_xml_settings(monkeypatch):
+    calls = []
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
+
+    jobs.configure_case_for_orchestration("/fake/case")
+
+    assert [cmd for cmd, _ in calls] == [
+        ["./xmlchange", "RESUBMIT=0"],
+        ["./xmlchange", "STOP_OPTION=nmonths"],
+        ["./xmlchange", "DOUT_S=TRUE"],
+        ["./xmlchange", "CONTINUE_RUN=FALSE"],
+        ["./xmlchange", "REST_OPTION=nmonths"],
+        ["./xmlchange", "REST_N=1"],
+    ]
+    assert all(cwd == "/fake/case" for _, cwd in calls)
 
 
 def test_flip_mcb_off_replaces_namelist_line(tmp_path, monkeypatch):
@@ -61,12 +140,7 @@ def test_flip_mcb_off_replaces_namelist_line(tmp_path, monkeypatch):
     nl_path.write_text("some_other_var = 1\nMCB_seeding_amt = 1\n")
 
     calls = []
-
-    def fake_run(cmd, cwd=None, check=None):
-        calls.append((cmd, cwd))
-        return FakeCompletedProcess()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
 
     jobs.flip_mcb_off(str(tmp_path))
 
@@ -79,12 +153,7 @@ def test_flip_mcb_off_replaces_namelist_line(tmp_path, monkeypatch):
 
 def test_set_batch_mail_runs_expected_xmlchange_calls(monkeypatch):
     calls = []
-
-    def fake_run(cmd, cwd=None, check=None):
-        calls.append((cmd, cwd))
-        return FakeCompletedProcess()
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
 
     jobs.set_batch_mail("/fake/case", "walkerl@example.edu")
 
@@ -92,6 +161,64 @@ def test_set_batch_mail_runs_expected_xmlchange_calls(monkeypatch):
         (["./xmlchange", "BATCH_MAIL_TO=walkerl@example.edu"], "/fake/case"),
         (["./xmlchange", "BATCH_MAIL_TYPE=begin,end,fail"], "/fake/case"),
     ]
+
+
+def test_failed_command_error_includes_captured_stdout_and_stderr(monkeypatch):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        raise subprocess.CalledProcessError(
+            2, cmd,
+            output="ERROR: xmlchange output detail\n",
+            stderr="ERROR: STOP_N is not a valid xml id\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        jobs.set_stop_n("/fake/case", 12)
+
+    message = str(exc_info.value)
+    assert "STOP_N is not a valid xml id" in message
+    assert "xmlchange output detail" in message
+    assert "exit status 2" in message
+    assert "/fake/case" in message
+
+
+def test_submit_case_failure_error_includes_captured_output(monkeypatch):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        raise subprocess.CalledProcessError(
+            1, cmd, output="", stderr="ERROR: Case is not built\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="Case is not built"):
+        jobs.submit_case("/fake/case")
+
+
+def test_create_branch_case_failure_error_includes_build_log(monkeypatch):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        raise subprocess.CalledProcessError(
+            1, cmd, output="##### setting up case #####\nBuild failed in cam\n", stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="Build failed in cam"):
+        jobs.create_branch_case(*CREATE_BRANCH_ARGS)
+
+
+def test_submit_orchestrator_self_failure_error_includes_qsub_stderr(monkeypatch):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        raise subprocess.CalledProcessError(
+            1, cmd, output="", stderr="qsub: Unknown queue\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="Unknown queue"):
+        jobs.submit_orchestrator_self(
+            "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "w@example.edu",
+        )
 
 
 def test_run_check_warming_parses_json_stdout(monkeypatch):
@@ -119,41 +246,92 @@ def test_run_check_warming_raises_on_nonzero_exit(monkeypatch):
 
 
 def test_create_branch_case_returns_parsed_casedir(monkeypatch):
-    def fake_run(cmd, env, capture_output, text, check):
-        assert env["REFCASE"] == "refcase-1"
-        assert env["MCB_ON"] == "1"
-        assert env["NOTIFICATION_EMAIL"] == "walkerl@example.edu"
+    captured = {}
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        captured["env"] = env
         return FakeCompletedProcess(
             stdout="##### done #####\nCASEDIR=/glade/work/walkerl/cases/branch.009\n"
         )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    casedir = jobs.create_branch_case(
-        "create_branch_case.sh", "1051", "refcase-1", 9, "2054-06-01", 3, True,
-        "/glade/work/walkerl/cases", "walkerl@example.edu",
-    )
+    casedir = jobs.create_branch_case(*CREATE_BRANCH_ARGS)
 
     assert casedir == "/glade/work/walkerl/cases/branch.009"
+    env = captured["env"]
+    assert env["REFCASE"] == "refcase-1"
+    assert env["MCB_ON"] == "1"
+    assert env["NOTIFICATION_EMAIL"] == "walkerl@example.edu"
+
+
+def test_create_branch_case_passes_every_configurable_variable(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        captured["env"] = env
+        return FakeCompletedProcess(stdout="CASEDIR=/cases/branch.009\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    jobs.create_branch_case(*CREATE_BRANCH_ARGS)
+
+    env = captured["env"]
+    assert env["ENS"] == "1051"
+    assert env["BRANCH_NUMBER"] == "9"
+    assert env["STARTDATE"] == "2054-06-01"
+    assert env["STOP_N"] == "3"
+    assert env["RESOLN"] == "f09_g17"
+    assert env["COMPSET"] == "BSSP370smbb"
+    assert env["PROJECT"] == "UCSD0083"
+    assert env["SRCDIR"] == "/glade/work/walkerl/MCB_mods"
+    assert env["TAGDIR"] == "/glade/work/walkerl/cesm_tags/cesm2.1.5"
+    assert env["CASEROOT"] == "/glade/work/walkerl/cases"
+    assert env["SCRATCHROOT"] == "/glade/derecho/scratch/walkerl"
+
+
+def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        captured["env"] = env
+        return FakeCompletedProcess(stdout="CASEDIR=/cases/branch.009\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    # A stray PROJECT/CASEROOT in the PBS job environment must not reach the
+    # script; only the explicitly configured values may.
+    monkeypatch.setenv("PROJECT", "SOMEONE_ELSES_ALLOCATION")
+    monkeypatch.setenv("CASEROOT", "/wrong/caseroot")
+    monkeypatch.setenv("MCB_ON", "0")
+    monkeypatch.setenv("STRAY_VARIABLE", "leaked")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    jobs.create_branch_case(*CREATE_BRANCH_ARGS)
+
+    env = captured["env"]
+    assert env["PROJECT"] == "UCSD0083"
+    assert env["CASEROOT"] == "/glade/work/walkerl/cases"
+    assert env["MCB_ON"] == "1"
+    assert "STRAY_VARIABLE" not in env
+    # PATH is passed through deliberately: the script needs it to find bash,
+    # cp, and the CIME tooling.
+    assert env["PATH"] == "/usr/bin:/bin"
 
 
 def test_create_branch_case_raises_when_no_casedir_reported(monkeypatch):
-    def fake_run(cmd, env, capture_output, text, check):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
         return FakeCompletedProcess(stdout="no casedir here\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(ValueError, match="did not report a CASEDIR"):
-        jobs.create_branch_case(
-            "create_branch_case.sh", "1051", "refcase-1", 9, "2054-06-01", 3, True,
-            "/glade/work/walkerl/cases", "walkerl@example.edu",
-        )
+        jobs.create_branch_case(*CREATE_BRANCH_ARGS)
 
 
 def test_submit_orchestrator_self_builds_qsub_dependency_command(monkeypatch):
     captured = {}
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
         captured["cmd"] = cmd
         return FakeCompletedProcess(stdout="66666.derecho\n")
 
@@ -168,3 +346,24 @@ def test_submit_orchestrator_self_builds_qsub_dependency_command(monkeypatch):
         "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
     ]
     assert job_id == "66666.derecho"
+
+
+def test_submit_orchestrator_self_passes_project_and_queue_when_given(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        captured["cmd"] = cmd
+        return FakeCompletedProcess(stdout="66666.derecho\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    jobs.submit_orchestrator_self(
+        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "walkerl@example.edu",
+        project="UCSD0083", queue="develop",
+    )
+
+    assert captured["cmd"] == [
+        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "walkerl@example.edu",
+        "-A", "UCSD0083", "-q", "develop",
+        "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
+    ]

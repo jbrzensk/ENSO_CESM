@@ -94,8 +94,9 @@ def test_stops_when_next_year_exceeds_end_year_from_cooldown():
     assert transition.next_stage == Stage.DONE
 
 
-def test_cannot_transition_from_failed_stage():
-    state = make_state(stage=Stage.FAILED)
+@pytest.mark.parametrize("terminal_stage", [Stage.FAILED, Stage.DONE])
+def test_cannot_transition_from_terminal_stage(terminal_stage):
+    state = make_state(stage=terminal_stage)
 
     with pytest.raises(ValueError, match="Cannot decide a transition"):
         decide_transition(state, None, end_year=2100)

@@ -50,6 +50,8 @@ def run_cycle(state_file: str, config_file: str) -> None:
             config["create_branch_case_script"], config["ens"], transition.ref_case,
             transition.next_branch_number, transition.start_date, transition.stop_n,
             transition.mcb_on, config["caseroot"], config["notification_email"],
+            config["resoln"], config["compset"], config["project"],
+            config["srcdir"], config["tagdir"], config["scratchroot"],
         )
         job_id = jobs.submit_case(casedir)
         state.case_name = os.path.basename(casedir)
@@ -70,29 +72,41 @@ def run_cycle(state_file: str, config_file: str) -> None:
 
     jobs.submit_orchestrator_self(
         config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["project"], config["orchestrator_queue"],
     )
 
 
 def bootstrap(state_file: str, config_file: str, lineage_name: str,
-              initial_refcase: str, start_year: int) -> None:
+              initial_refcase: str, start_year: int, branch_number: int = 0) -> None:
     config = load_config(config_file)
     state = CycleState(
         lineage_name=lineage_name, case_name=initial_refcase,
-        stage=Stage.RUNNING, branch_number=0, year=start_year,
+        stage=Stage.RUNNING, branch_number=branch_number, year=start_year,
     )
     save_state(state_file, state)
 
     casedir = os.path.join(config["caseroot"], initial_refcase)
+    # The adopted case was created outside this automation and may carry
+    # settings (notably RESUBMIT>0) that conflict with orchestrated running,
+    # so force the pipeline's requirements before the first submission.
+    jobs.configure_case_for_orchestration(casedir)
     jobs.set_batch_mail(casedir, config["notification_email"])
     job_id = jobs.resubmit_case(casedir, 12)
     jobs.submit_orchestrator_self(
         config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["project"], config["orchestrator_queue"],
     )
 
 
-def mark_failed(state_file: str) -> None:
+def mark_failed(state_file: str, error: BaseException = None) -> None:
     try:
         state = load_state(state_file)
+        if state.stage != Stage.FAILED:
+            # Preserve which stage the lineage was in: it is the one piece of
+            # state an operator needs to resume the chain after a fix.
+            state.failed_from_stage = state.stage
+        if error is not None:
+            state.failure_reason = f"{type(error).__name__}: {error}"
         state.stage = Stage.FAILED
         save_state(state_file, state)
     except Exception:
@@ -107,6 +121,11 @@ def main() -> None:
     parser.add_argument("--lineage-name")
     parser.add_argument("--initial-refcase")
     parser.add_argument("--start-year", type=int)
+    parser.add_argument(
+        "--branch-number", type=int, default=0,
+        help="branch number of the case being bootstrapped from; the first MCB "
+             "branch this lineage creates will be this number + 1 (default: 0)",
+    )
     args = parser.parse_args()
 
     try:
@@ -114,12 +133,12 @@ def main() -> None:
             if not (args.lineage_name and args.initial_refcase and args.start_year):
                 parser.error("--bootstrap requires --lineage-name, --initial-refcase, and --start-year")
             bootstrap(args.state_file, args.config_file, args.lineage_name,
-                      args.initial_refcase, args.start_year)
+                      args.initial_refcase, args.start_year, args.branch_number)
         else:
             run_cycle(args.state_file, args.config_file)
-    except Exception:
+    except Exception as exc:
         log.exception("Cycle failed for state file %s; halting chain.", args.state_file)
-        mark_failed(args.state_file)
+        mark_failed(args.state_file, exc)
         sys.exit(1)
 
 

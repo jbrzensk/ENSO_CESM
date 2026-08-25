@@ -20,3 +20,9 @@ python_exe: "python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"
 orchestrator_wrapper_script: "orchestrator_wrapper.sh"
+
+# PBS queue for the ~1-minute orchestrator job itself (passed as `qsub -q`,
+# overriding the static `#PBS -q` line in orchestrator_wrapper.sh). Confirm
+# the right queue for a short, frequent job against NCAR/Derecho's current
+# queue and billing policies — see docs/RUNBOOK.md's pre-flight checklist.
+orchestrator_queue: "main"
