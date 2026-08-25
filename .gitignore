@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+
+# PBS job stdout/stderr files (e.g. enso_mcb_orchestrator.o123456), which land
+# in the repo checkout once per orchestrator invocation for decades.
+*.o[0-9]*
+*.e[0-9]*
