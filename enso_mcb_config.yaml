@@ -1,0 +1,22 @@
+ens: "1051"
+resoln: "f09_g17"
+compset: "BSSP370smbb"
+project: "UCSD0083"
+srcdir: "/glade/work/walkerl/MCB_mods/bugfix_plus_namelist"
+tagdir: "/glade/work/walkerl/cesm_tags/cesm2.1.5+MCBnl"
+caseroot: "/glade/work/walkerl/cases"
+scratchroot: "/glade/derecho/scratch/walkerl"
+
+# TODO(user): fill in the path to the fixed Nino3.4 June climatology
+# reference file before running this for real. See the "Open item" in
+# docs/superpowers/specs/2026-08-17-enso-mcb-automation-design.md.
+climatology_file: "/glade/work/walkerl/enso_mcb_automation/climatology/nino34_june_climatology.nc"
+
+warming_threshold_c: 1.0
+end_year: 2100
+notification_email: "walkerl@example.edu"
+
+python_exe: "python3"
+check_warming_script: "check_warming.py"
+create_branch_case_script: "create_branch_case.sh"
+orchestrator_wrapper_script: "orchestrator_wrapper.sh"
