@@ -40,49 +40,161 @@ full design.
    `JOB_ID_RE` in `enso_mcb_jobs.py` or the path template in
    `history_file_path` before bootstrapping.
 
+   `parse_last_job_id` prefers a line mentioning "archive" and only falls
+   back to the last line, so also confirm that the archive job's ID
+   actually appears on a line that names `st_archive`.
+
+4. Verify the CIME variable names used to configure job email, on a real
+   case:
+   ```bash
+   cd /glade/work/walkerl/cases/<initial-refcase>
+   ./xmlquery BATCH_MAIL_TO BATCH_MAIL_TYPE
+   ```
+   **This is unverified against this CESM/CIME version.**
+   `create_branch_case.sh` and `enso_mcb_jobs.set_batch_mail()` both run
+   `./xmlchange BATCH_MAIL_TO=... BATCH_MAIL_TYPE=...`. If `xmlquery`
+   reports those are not recognized IDs, find the correct ones for this
+   CIME version (the likely alternatives are `MAIL_USER` and `MAIL_TYPE`;
+   `./xmlquery --listall | grep -i mail` will show what exists) and update
+   **both** `create_branch_case.sh` and `enso_mcb_jobs.set_batch_mail()`
+   before bootstrapping. Getting this wrong means either a hard xmlchange
+   failure on the first cycle, or silently no failure emails.
+
+5. Confirm the PBS queue for the orchestrator job itself
+   (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
+   The orchestrator job is short (about a minute, except on branch cycles
+   where it blocks on `case.build` for 20-30 minutes) but runs once per
+   cycle for decades. Check NCAR/Derecho's **current** queue and billing
+   policies for short, frequent, single-core jobs — this repo cannot
+   verify them — and set `orchestrator_queue` accordingly. It is passed
+   as `qsub -q`, overriding the `#PBS -q` line in
+   `orchestrator_wrapper.sh`, so no script edit is needed. The same
+   applies to `project`, passed as `qsub -A`.
+
+6. Confirm the venv exists in the repo checkout on Derecho. The
+   orchestrator needs `xarray`/`netCDF4`/`PyYAML`, and
+   `orchestrator_wrapper.sh` runs `$PBS_O_WORKDIR/.venv/bin/python3`:
+   ```bash
+   cd /glade/work/walkerl/enso_mcb_automation
+   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+   ```
+
 ## Bootstrapping a new lineage
 
 ```bash
 cd /glade/work/walkerl/enso_mcb_automation   # wherever this repo is checked out on Derecho
-python3 enso_mcb_orchestrator.py \
+.venv/bin/python3 enso_mcb_orchestrator.py \
     --state-file /glade/work/walkerl/enso_mcb_automation/state/enso_mcb_1051.json \
     --config-file enso_mcb_config.yaml \
     --bootstrap \
     --lineage-name enso_mcb_1051 \
     --initial-refcase <your-existing-case-name> \
-    --start-year <year-of-the-first-check>
+    --start-year <year-of-the-first-check> \
+    --branch-number <branch number of that existing case>
 ```
 
-This resubmits the initial case for a 12-month segment and chains the
-first orchestrator job dependent on its archive job. From here, the
-chain runs itself.
+`--branch-number` must be the branch number of `--initial-refcase` (e.g.
+`9` for `...branch.009`); the first MCB branch case this lineage creates
+will be that number + 1. It defaults to `0`, which would collide with the
+existing `branch.008`/`branch.009` cases of this lineage — pass it
+explicitly.
+
+Bootstrapping forces the XML settings the pipeline requires onto the
+adopted case (`RESUBMIT=0`, `STOP_OPTION=nmonths`, `DOUT_S=TRUE`,
+`REST_OPTION=nmonths`, `REST_N=1`), configures the mail settings,
+resubmits the case for a 12-month segment, and chains the first
+orchestrator job dependent on its archive job. From here, the chain runs
+itself.
+
+`RESUBMIT=0` matters: the manual `create_ENSO_controller_case.sh` sets
+`RESUBMIT=3`, and if that were left in place CIME's own auto-resubmit
+would advance the case concurrently with the orchestrator's explicit
+resubmissions — two chains driving one case.
 
 ## Monitoring
 
 - `qstat -u $USER` shows the currently queued/running job in the chain
   (either a CESM run/archive job pair, or the orchestrator job).
 - `cat /glade/work/walkerl/enso_mcb_automation/state/<lineage>.json` shows
-  the current stage, case, branch number, and year — this is the single
-  source of truth for where the lineage is.
+  the current stage, case, branch number, and year — it records where the
+  lineage got to, but see the warning below: it is **not** updated when a
+  CESM job fails, so "state file plus `qstat`" together are the real
+  picture.
 - Each orchestrator invocation logs to its PBS job's stdout/stderr file
   (`enso_mcb_orchestrator.o<jobid>`), including the warming check result
   whenever one was performed.
 
 ## Recovering from a failure
 
-A `"stage": "FAILED"` in the state file means the chain has stopped
-resubmitting itself — nothing is silently retrying.
+There are two distinct failure signatures, and only one of them writes
+`FAILED` to the state file. **Neither retries automatically.**
 
-1. Read the failing orchestrator job's log
-   (`enso_mcb_orchestrator.o<jobid>`) for the exception traceback.
+### Signature A — the orchestrator's own Python failed
+
+Symptoms: the state file says `"stage": "FAILED"`, plus
+`"failed_from_stage"` (the stage it was in when it failed) and
+`"failure_reason"` (the exception). The orchestrator caught the
+exception, recorded it, and exited non-zero without chaining a next job.
+Typical causes: missing climatology/history file, an `xmlchange` that
+failed, `case.submit`/`qsub` rejecting the job, a `case.build` failure.
+
+1. Read `"failure_reason"` in the state file, and the failing
+   orchestrator job's log (`enso_mcb_orchestrator.o<jobid>`) for the full
+   traceback. Failures of subprocesses (CIME, qsub, the branch-case
+   script) include the command's captured stdout/stderr in the message.
 2. Fix the underlying issue (missing file, bad path, CIME error, etc.).
-3. Manually edit the state file's `"stage"` back to the state it should
-   resume from (e.g. `"RUNNING"`, `"MCB_ON"`, `"MCB_COOLDOWN"`) if the
-   failure happened before that state was actually reached on disk.
-4. Resume by resubmitting the orchestrator directly:
+3. Set `"stage"` back to the value in `"failed_from_stage"` — that is
+   the stage to resume from — and clear `"failed_from_stage"` and
+   `"failure_reason"`. Double-check `"case_name"`/`"year"` against what
+   actually happened on disk: the orchestrator only advances them after
+   the corresponding submission succeeded.
+4. Resume by running the orchestrator directly:
    ```bash
-   python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
+   cd /glade/work/walkerl/enso_mcb_automation
+   .venv/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
    ```
+
+### Signature B — a CESM run or archive job failed
+
+Symptoms: **the state file still shows a normal, non-terminal stage**
+(`RUNNING`/`MCB_ON`/`MCB_COOLDOWN`) and never changes; `qstat -u $USER`
+shows nothing for this lineage; you received a PBS abort email for the
+CESM job.
+
+This is the case the state file cannot report. The orchestrator submits
+the CESM segment and exits immediately — it never observes that job's
+exit status. When the segment fails, PBS's `depend=afterok` dependency
+means the *next* orchestrator job is never released: PBS holds it and
+eventually deletes it. So nothing marks the state `FAILED`; the lineage
+simply stops, frozen at its last stage, forever.
+
+Recognizing it: if the state file has not changed for longer than a
+segment should take, run `qstat -u $USER`. **An empty queue with a
+non-terminal stage in the state file means the chain is dead.**
+(`qstat -s` on the held orchestrator job, if it still exists, shows the
+unsatisfied dependency.)
+
+1. Find the failed CESM job's logs in the case directory
+   (`$CASEDIR/CaseStatus`, and the `cesm.log.*`/`atm.log.*` files in the
+   run directory) and fix the cause.
+2. Delete any leftover held orchestrator job (`qdel <jobid>`) so it does
+   not fire unexpectedly.
+3. The state file's stage is still correct for *what was submitted* —
+   the failed segment is the one belonging to the recorded stage — so
+   after fixing the case, resubmit that segment by hand
+   (`cd $CASEDIR && ./case.submit`) and chain the orchestrator to its
+   archive job, or simply re-run the orchestrator directly as in
+   Signature A step 4 once the segment has completed.
+
+### A partially-created branch case
+
+`create_branch_case.sh` is not resumable. If a branch cycle failed
+partway through case creation (or during `case.build`), a partial case
+directory is left behind, and re-running the orchestrator will fail
+immediately with `ERROR: case directory already exists: <path>`. Inspect
+that directory; if it is an incomplete leftover, `rm -rf` it (and the
+matching run directory under `$SCRATCHROOT/<casename>/run`) before
+retrying.
 
 ## Stopping a lineage early
 
@@ -90,4 +202,8 @@ Cancel the currently queued/running job for that lineage
 (`qdel <jobid>`) — since each stage only chains the *next* job after
 finishing, cancelling one job stops the chain without needing to touch
 the state file. Resume later by resubmitting the orchestrator manually
-as in step 4 above.
+as in Signature A step 4 above.
+
+Note that a deliberately cancelled lineage looks exactly like Signature B
+(non-terminal stage, empty queue), so leave yourself a note if you intend
+to resume it later.
