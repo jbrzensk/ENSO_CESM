@@ -40,9 +40,12 @@ full design.
    `JOB_ID_RE` in `enso_mcb_jobs.py` or the path template in
    `history_file_path` before bootstrapping.
 
-   `parse_last_job_id` prefers a line mentioning "archive" and only falls
-   back to the last line, so also confirm that the archive job's ID
-   actually appears on a line that names `st_archive`.
+   `parse_last_job_id` prefers a line naming `st_archive` (CIME's archive
+   job name) and only falls back to the last line of output, so also
+   confirm that the archive job's ID actually appears on a line that names
+   `st_archive`. It deliberately ignores lines that merely contain the word
+   "archive" as part of a path (e.g. the `DOUT_S_ROOT` line), because a job
+   ID cannot be parsed reliably out of a case-name path.
 
 4. Verify the CIME variable names used to configure job email, on a real
    case:
@@ -63,9 +66,10 @@ full design.
 5. Confirm the PBS queue for the orchestrator job itself
    (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
    The orchestrator job is short (about a minute, except on branch cycles
-   where it blocks on `case.build` for 20-30 minutes) but runs once per
+   where it blocks on `case.build` — see item 7) but runs once per
    cycle for decades. Check NCAR/Derecho's **current** queue and billing
-   policies for short, frequent, single-core jobs — this repo cannot
+   policies for short, frequent, small jobs (the wrapper currently requests
+   8 cores so the branch-cycle build has cores to use) — this repo cannot
    verify them — and set `orchestrator_queue` accordingly. It is passed
    as `qsub -q`, overriding the `#PBS -q` line in
    `orchestrator_wrapper.sh`, so no script edit is needed. The same
@@ -78,6 +82,51 @@ full design.
    cd /glade/work/walkerl/enso_mcb_automation
    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
    ```
+
+7. **Time one real `case.build` and size the orchestrator's PBS job to
+   match.** On the cycle where warming is detected, the orchestrator job
+   runs `create_branch_case.sh` synchronously, and that script's
+   `./case.build` step runs *inside the orchestrator's own PBS job*. The
+   `#PBS -l select=1:ncpus=8` and `#PBS -l walltime=02:00:00` lines at the
+   top of `orchestrator_wrapper.sh` (lines 4-5) are **a guess** — no real
+   build has been timed on Derecho. If the build overruns the walltime,
+   PBS kills the orchestrator mid-build and the chain stops (this looks
+   like Signature B below, with a partially-created case to clean up).
+
+   Do one timed trial invocation before the first production bootstrap
+   (this builds a real case — pick a throwaway branch number):
+   ```bash
+   cd /glade/work/walkerl/enso_mcb_automation
+   time env ENS=1051 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
+       STARTDATE=<YYYY-MM-DD> STOP_N=3 MCB_ON=1 \
+       NOTIFICATION_EMAIL=walkerl@example.edu \
+       bash create_branch_case.sh
+   ```
+
+   Note the wallclock time and how many cores the build actually used
+   (Derecho builds are parallel), then edit the two `#PBS -l` lines in
+   `orchestrator_wrapper.sh` to the measured time plus generous headroom
+   (at least 1.5x) and a matching `ncpus`. Delete the throwaway
+   `branch.999` case directory and its run directory afterwards.
+
+8. **Know where to look if a live build or submit fails on the
+   environment.** `create_branch_case.sh` is not run with the full ambient
+   environment: `enso_mcb_jobs.create_branch_case()` builds the subprocess
+   env from an explicit allowlist, `PASSTHROUGH_ENV_VARS` (top of
+   `enso_mcb_jobs.py`), plus the pipeline's own configured variables. This
+   deliberately stops a stray `PROJECT`/`CASEROOT`/`SCRATCHROOT` in the PBS
+   job environment from overriding the configured values — but it also
+   means anything CIME needs that is not on the list is simply absent.
+
+   Currently allowed through: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
+   `LANG`, `LC_ALL`, `TMPDIR`, `LD_LIBRARY_PATH`, `PYTHONPATH`, and the
+   Lmod module-system variables (`MODULEPATH`, `MODULESHOME`, `LMOD_CMD`,
+   `LMOD_PKG`, `LMOD_SYSTEM_NAME`). If a live `case.build` or `case.submit`
+   fails with an environment-shaped error — `module: command not found`, a
+   missing compiler/MPI wrapper, an unresolved shared library, a missing
+   NetCDF/ESMF path — **check `PASSTHROUGH_ENV_VARS` first** and add the
+   missing variable there. Compare against a working interactive shell
+   (`env | sort`) to find what the build actually depends on.
 
 ## Bootstrapping a new lineage
 

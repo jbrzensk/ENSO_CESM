@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 #PBS -N enso_mcb_orchestrator
 #PBS -A UCSD0083
-#PBS -l select=1:ncpus=1
-#PBS -l walltime=01:00:00
+#PBS -l select=1:ncpus=8
+#PBS -l walltime=02:00:00
 #PBS -q main
 #PBS -j oe
 
-# Walltime is an hour even though a typical orchestrator invocation takes about
-# a minute: on the cycle where warming is detected, this job runs
+# !! THE ncpus/walltime VALUES ABOVE ARE A STARTING GUESS AND MUST BE
+# !! CONFIRMED AGAINST A REAL TIMED BUILD ON DERECHO BEFORE PRODUCTION USE.
+# !! See the pre-flight checklist in docs/RUNBOOK.md.
+#
+# A typical orchestrator invocation takes about a minute and needs one core.
+# But on the cycle where warming is detected, this job runs
 # create_branch_case.sh synchronously, and that script builds the new CESM case
-# (./case.build), which takes 20-30 minutes for a real CESM2 build. A shorter
-# walltime would kill the orchestrator mid-build and break the chain.
+# (./case.build) inside this job. A parallel CESM2 build wants several cores
+# and can take well over an hour depending on machine load and compset, so a
+# single core and a one-hour walltime would risk killing the orchestrator
+# mid-build and breaking the chain. Nobody has timed a real build on this
+# system yet, hence: measure it, then set these to the measured time plus
+# generous headroom.
 #
 # The -A (project) and -q (queue) values above are defaults; the orchestrator
 # passes `qsub -A <project> -q <orchestrator_queue>` from enso_mcb_config.yaml
