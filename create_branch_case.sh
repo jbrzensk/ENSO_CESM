@@ -125,9 +125,10 @@ EOF
   fi
 
   # Build the case here: nothing else in the automated chain ever calls
-  # case.build, and case.submit on an unbuilt case fails. This is the slow
-  # step (20-30 minutes for a real CESM2 build) and the orchestrator blocks
-  # on it — see the walltime note in orchestrator_wrapper.sh.
+  # case.build, and case.submit on an unbuilt case fails. Nobody has timed
+  # a real build on this system yet — it may take well over an hour — and
+  # the orchestrator blocks on it; see the walltime note in
+  # orchestrator_wrapper.sh and RUNBOOK.md pre-flight item 7.
   run ./case.build
 )
 

@@ -94,11 +94,15 @@ full design.
    like Signature B below, with a partially-created case to clean up).
 
    Do one timed trial invocation before the first production bootstrap
-   (this builds a real case — pick a throwaway branch number):
+   (this builds a real case — pick a throwaway branch number). `STARTDATE`
+   must be a date for which `<refcase>` already has an archived restart set
+   — i.e. `$SCRATCHROOT/archive/<refcase>/rest/<STARTDATE>-00000/` must
+   exist — otherwise the restart-copy step fails before `case.build` ever
+   runs and you get no timing data:
    ```bash
    cd /glade/work/walkerl/enso_mcb_automation
    time env ENS=1051 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
-       STARTDATE=<YYYY-MM-DD> STOP_N=3 MCB_ON=1 \
+       STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=3 MCB_ON=1 \
        NOTIFICATION_EMAIL=walkerl@example.edu \
        bash create_branch_case.sh
    ```
@@ -106,7 +110,11 @@ full design.
    Note the wallclock time and how many cores the build actually used
    (Derecho builds are parallel), then edit the two `#PBS -l` lines in
    `orchestrator_wrapper.sh` to the measured time plus generous headroom
-   (at least 1.5x) and a matching `ncpus`. Delete the throwaway
+   (at least 1.5x) and a matching `ncpus`. Build parallelism is controlled
+   by CIME's `GMAKE_J` setting (`./xmlquery GMAKE_J` in the case directory),
+   not directly by the PBS `ncpus` request — if the build only used a
+   handful of cores while `ncpus` requests more, check `GMAKE_J` before
+   assuming more `ncpus` will speed anything up. Delete the throwaway
    `branch.999` case directory and its run directory afterwards.
 
 8. **Know where to look if a live build or submit fails on the
