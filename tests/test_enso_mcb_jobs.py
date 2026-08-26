@@ -77,6 +77,31 @@ def test_parse_last_job_id_falls_back_to_last_line_without_archive_line():
     assert jobs.parse_last_job_id(output) == "55555"
 
 
+def test_parse_last_job_id_ignores_archive_paths_in_non_submission_lines():
+    output = (
+        "Setting DOUT_S_ROOT to /glade/derecho/scratch/walkerl/archive/"
+        "b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1051.branch.009\n"
+        "Submitted job id is 12346.desched1\n"
+    )
+
+    # The DOUT_S_ROOT line contains "archive" only as a path component, and
+    # JOB_ID_RE would match "21" out of "b.e21." if it were treated as a
+    # candidate. The real job ID is on the following line.
+    assert jobs.parse_last_job_id(output) == "12346"
+
+
+def test_parse_last_job_id_prefers_st_archive_line_despite_archive_paths():
+    output = (
+        "Setting DOUT_S_ROOT to /glade/derecho/scratch/walkerl/archive/"
+        "b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1051.branch.009\n"
+        "Submitted job case.run with id 12345.desched1\n"
+        "Submitted job case.st_archive with id 12346.desched1\n"
+        "Submitting job script case.run\n"
+    )
+
+    assert jobs.parse_last_job_id(output) == "12346"
+
+
 def test_submit_case_returns_parsed_job_id(monkeypatch):
     calls = []
     monkeypatch.setattr(subprocess, "run", make_fake_run(
@@ -128,11 +153,22 @@ def test_configure_case_for_orchestration_forces_pipeline_xml_settings(monkeypat
         ["./xmlchange", "RESUBMIT=0"],
         ["./xmlchange", "STOP_OPTION=nmonths"],
         ["./xmlchange", "DOUT_S=TRUE"],
-        ["./xmlchange", "CONTINUE_RUN=FALSE"],
         ["./xmlchange", "REST_OPTION=nmonths"],
         ["./xmlchange", "REST_N=1"],
     ]
     assert all(cwd == "/fake/case" for _, cwd in calls)
+
+
+def test_configure_case_for_orchestration_leaves_continue_run_alone(monkeypatch):
+    calls = []
+    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
+
+    jobs.configure_case_for_orchestration("/fake/case")
+
+    # An adopted case has run history, so CONTINUE_RUN must end up TRUE.
+    # resubmit_case sets it; forcing FALSE here would leave a window where
+    # the case is configured to re-initialize over that history.
+    assert not any("CONTINUE_RUN" in arg for cmd, _ in calls for arg in cmd)
 
 
 def test_flip_mcb_off_replaces_namelist_line(tmp_path, monkeypatch):

@@ -47,15 +47,28 @@ def parse_last_job_id(submit_output: str) -> str:
 
     case.submit prints one line per submitted job (the run job, then the
     short-term archive job). The orchestrator must depend on the *archive*
-    job, since the warming check reads archived output — so prefer a line
-    mentioning "archive" when one is present, rather than blindly trusting
-    the last line to be the archive job.
+    job, since the warming check reads archived output — so prefer the
+    `st_archive` job's line when one is present, rather than blindly
+    trusting the last line to be the archive job.
+
+    The match is deliberately on `st_archive` (CIME's actual archive job
+    name) and not on the bare word "archive": case.submit output also
+    contains archive *paths* (`DOUT_S_ROOT` is
+    `/glade/derecho/scratch/<user>/archive/b.e21...`), and JOB_ID_RE would
+    happily pull a digit fragment such as "21" out of `b.e21.` on such a
+    line. A candidate line must both name `st_archive` and yield a job ID;
+    otherwise we fall back to the last line, which is correct for
+    single-line output and is the pre-existing behaviour. The real CIME
+    output format is still unverified against Derecho — see the pre-flight
+    checklist in docs/RUNBOOK.md.
     """
     lines = [line for line in submit_output.strip().splitlines() if line.strip()]
     if not lines:
         raise ValueError("case.submit produced no output to parse a job ID from")
 
-    for line in reversed([line for line in lines if "archive" in line.lower()]):
+    for line in reversed(lines):
+        if "st_archive" not in line.lower():
+            continue
         match = JOB_ID_RE.search(line)
         if match:
             return match.group(1)
@@ -89,11 +102,17 @@ def configure_case_for_orchestration(case_dir: str) -> None:
     auto-resubmit would advance the case concurrently with the orchestrator's
     explicit resubmissions — two chains driving one case — and no June 1
     restart file would ever be written for the MCB branch to start from.
+
+    CONTINUE_RUN is deliberately *not* touched here. An adopted case already
+    has run history, so it must end up CONTINUE_RUN=TRUE (continue from the
+    existing restart); setting it FALSE even transiently would leave the case
+    configured to re-initialize and overwrite that history if anything
+    between here and the submission failed. `resubmit_case` sets it TRUE
+    right before submitting, which is the only value this pipeline ever wants.
     """
     _run_checked(["./xmlchange", "RESUBMIT=0"], cwd=case_dir)
     _run_checked(["./xmlchange", "STOP_OPTION=nmonths"], cwd=case_dir)
     _run_checked(["./xmlchange", "DOUT_S=TRUE"], cwd=case_dir)
-    _run_checked(["./xmlchange", "CONTINUE_RUN=FALSE"], cwd=case_dir)
     # Monthly restarts: the MCB branch case starts from the June 1 restart of
     # the RUNNING segment, which CIME only writes if asked for explicitly.
     _run_checked(["./xmlchange", "REST_OPTION=nmonths"], cwd=case_dir)
