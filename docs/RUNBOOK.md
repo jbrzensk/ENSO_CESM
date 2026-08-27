@@ -8,10 +8,20 @@ full design.
 ## Pre-flight checklist (do this once, before the first bootstrap)
 
 1. Fill in `enso_mcb_config.yaml`:
-   - `climatology_file`: path to the fixed Nino3.4 June climatology
-     reference file. This is currently a placeholder — the pipeline will
-     fail loudly (not silently) if it's left pointing at a nonexistent
-     file, but confirm it's set correctly before bootstrapping.
+   - `climatology_sst_dir`: confirmed to be
+     `/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST`
+     — the CESM2-LE archive of monthly SST tseries files (one file per
+     ensemble member per ~10-year chunk, both `BHISTcmip6` historical and
+     `BSSP370cmip6` scenario phases live in this same directory).
+     `build_climatology.py` builds each cycle's rolling 30-year June
+     climatology from here, for the ensemble member matching this
+     lineage's `ens` (`LE2-{ens}.001`) — confirmed via a real file's
+     `ncdump -h` to carry `SST`, `TAREA`, `TLAT`, `TLONG` exactly as
+     `check_warming.py` expects, so no variable-name overrides are needed
+     for this data source.
+   - `climatology_cache_dir`: where per-year built climatology files are
+     cached. Needs to exist or be creatable by the orchestrator's PBS job
+     user; it's created automatically on first use if missing.
    - `notification_email`: where PBS should send failure/abort emails.
    - Confirm `caseroot`, `scratchroot`, `srcdir`, `tagdir` match your
      actual Derecho paths.

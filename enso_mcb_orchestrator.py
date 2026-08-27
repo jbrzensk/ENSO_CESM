@@ -30,10 +30,20 @@ def run_cycle(state_file: str, config_file: str) -> None:
 
     warming_result = None
     if state.stage == Stage.RUNNING:
+        # Each lineage's climatology is built from the CESM2-LE ensemble
+        # member matching its own `ens` (LE2-{ens}.001), keeping every
+        # lineage's warming baseline consistent with its own background
+        # trajectory.
+        member = f"LE2-{config['ens']}.001"
+        climatology_file = jobs.build_climatology(
+            config["python_exe"], config["build_climatology_script"],
+            config["climatology_sst_dir"], member, state.year,
+            config["climatology_cache_dir"],
+        )
         warming_result = jobs.run_check_warming(
             config["python_exe"], config["check_warming_script"],
             history_file_path(config, state.case_name, state.year),
-            config["climatology_file"], state.year, config["warming_threshold_c"],
+            climatology_file, state.year, config["warming_threshold_c"],
         )
         log.info("Warming check for %s year %s: %s", state.case_name, state.year, warming_result)
 

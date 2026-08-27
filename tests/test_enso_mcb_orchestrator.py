@@ -19,7 +19,9 @@ def config_file(tmp_path):
         tagdir: "/tmp/tagdir"
         caseroot: "{tmp_path}/cases"
         scratchroot: "{tmp_path}/scratch"
-        climatology_file: "/tmp/clim.nc"
+        climatology_sst_dir: "{tmp_path}/sst_tseries"
+        climatology_cache_dir: "{tmp_path}/climatology_cache"
+        build_climatology_script: "build_climatology.py"
         warming_threshold_c: 1.0
         end_year: 2100
         notification_email: "walkerl@example.edu"
@@ -43,6 +45,7 @@ def state_file(tmp_path):
 
 
 def test_run_cycle_branches_to_mcb_on_when_warming_detected(monkeypatch, config_file, state_file):
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming",
                          lambda *a, **k: {"year": 2054, "anomaly_c": 1.4, "warming": True})
     branch_args = {}
@@ -68,8 +71,32 @@ def test_run_cycle_branches_to_mcb_on_when_warming_detected(monkeypatch, config_
     assert submitted_self["queue"] == "main"
 
 
+def test_run_cycle_derives_climatology_member_from_ens_and_passes_result_through(
+        monkeypatch, config_file, state_file):
+    climatology_calls = {}
+    monkeypatch.setattr(jobs, "build_climatology",
+                         lambda *a, **k: climatology_calls.update(args=a) or "/cache/nino34_climatology.nc")
+    warming_calls = {}
+    monkeypatch.setattr(jobs, "run_check_warming",
+                         lambda *a, **k: warming_calls.update(args=a) or
+                             {"year": 2054, "anomaly_c": 0.2, "warming": False})
+    monkeypatch.setattr(jobs, "resubmit_case", lambda casedir, stop_n: "22222")
+    monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
+
+    orch.run_cycle(state_file, config_file)
+
+    (python_exe, script, sst_dir, member, year, cache_dir) = climatology_calls["args"]
+    assert member == "LE2-1051.001"  # derived from config's ens: "1051"
+    assert year == 2054
+    assert script == "build_climatology.py"
+
+    (_, _, _, climatology_file_arg, _, _) = warming_calls["args"]
+    assert climatology_file_arg == "/cache/nino34_climatology.nc"
+
+
 def test_run_cycle_passes_every_configured_value_to_create_branch_case(
         monkeypatch, config_file, state_file, tmp_path):
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming",
                          lambda *a, **k: {"year": 2054, "anomaly_c": 1.4, "warming": True})
     captured = {}
@@ -99,6 +126,7 @@ def test_run_cycle_passes_every_configured_value_to_create_branch_case(
 
 
 def test_run_cycle_resubmits_next_year_when_no_warming(monkeypatch, config_file, state_file):
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming",
                          lambda *a, **k: {"year": 2054, "anomaly_c": 0.2, "warming": False})
     monkeypatch.setattr(jobs, "resubmit_case", lambda casedir, stop_n: "22222")
@@ -135,6 +163,7 @@ def test_run_cycle_stops_and_marks_done_past_end_year(monkeypatch, config_file, 
         lineage_name="l", case_name="branch.008", stage=Stage.RUNNING,
         branch_number=8, year=2100,
     ))
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming",
                          lambda *a, **k: {"year": 2100, "anomaly_c": 0.1, "warming": False})
     submitted_self = []
@@ -156,9 +185,9 @@ def test_run_cycle_does_nothing_for_terminal_states(monkeypatch, config_file, tm
         branch_number=8, year=2060,
     ))
     calls = []
-    for name in ("run_check_warming", "create_branch_case", "submit_case", "resubmit_case",
-                 "flip_mcb_off", "set_batch_mail", "configure_case_for_orchestration",
-                 "submit_orchestrator_self"):
+    for name in ("build_climatology", "run_check_warming", "create_branch_case", "submit_case",
+                 "resubmit_case", "flip_mcb_off", "set_batch_mail",
+                 "configure_case_for_orchestration", "submit_orchestrator_self"):
         monkeypatch.setattr(jobs, name,
                             lambda *a, _name=name, **k: calls.append(_name) or {})
 
@@ -238,6 +267,7 @@ def test_main_marks_failed_and_does_not_resubmit_on_error(monkeypatch, config_fi
     def boom(*a, **k):
         raise RuntimeError("case.submit blew up")
 
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming", boom)
     submitted_self = []
     monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: submitted_self.append(True))
@@ -259,6 +289,7 @@ def test_main_records_failing_stage_and_reason(monkeypatch, config_file, state_f
     def boom(*a, **k):
         raise RuntimeError("check_warming.py failed: history file not found")
 
+    monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming", boom)
     monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
     monkeypatch.setattr(

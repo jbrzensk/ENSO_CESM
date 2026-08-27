@@ -7,10 +7,18 @@ tagdir: "/glade/work/walkerl/cesm_tags/cesm2.1.5+MCBnl"
 caseroot: "/glade/work/walkerl/cases"
 scratchroot: "/glade/derecho/scratch/walkerl"
 
-# TODO(user): fill in the path to the fixed Nino3.4 June climatology
-# reference file before running this for real. See the "Open item" in
-# docs/superpowers/specs/2026-08-17-enso-mcb-automation-design.md.
-climatology_file: "/glade/work/walkerl/enso_mcb_automation/climatology/nino34_june_climatology.nc"
+# Confirmed directory of CESM2-LE monthly SST tseries files (one file per
+# ensemble member per ~10-year chunk, e.g.
+# b.e21.BSSP370cmip6.f09_g17.LE2-1011.001.pop.h.SST.201501-202412.nc).
+# build_climatology.py globs this directory for the member matching this
+# lineage's `ens` (LE2-{ens}.001) to build a rolling 30-year June
+# climatology for whatever year the pipeline is currently checking.
+climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST"
+
+# Where per-year built climatology files are cached (one per lineage/year,
+# named nino34_climatology_LE2-{ens}.001_{year}.nc). A previously-built
+# year's file is reused rather than rebuilt.
+climatology_cache_dir: "/glade/work/walkerl/enso_mcb_automation/climatology_cache"
 
 warming_threshold_c: 1.0
 end_year: 2100
@@ -19,6 +27,7 @@ notification_email: "walkerl@example.edu"
 python_exe: "python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"
+build_climatology_script: "build_climatology.py"
 orchestrator_wrapper_script: "orchestrator_wrapper.sh"
 
 # PBS queue for the ~1-minute orchestrator job itself (passed as `qsub -q`,

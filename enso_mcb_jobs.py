@@ -147,6 +147,32 @@ def set_batch_mail(case_dir: str, email: str) -> None:
     _run_checked(["./xmlchange", "BATCH_MAIL_TYPE=begin,end,fail"], cwd=case_dir)
 
 
+def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: str,
+                       year: int, cache_dir: str) -> str:
+    """Build (or reuse) this year's rolling climatology file for `member`.
+
+    The climatology only depends on (member, year), never on anything that
+    changes cycle to cycle, so a previously-built file for the same year is
+    reused rather than rebuilt.
+    """
+    output_path = os.path.join(cache_dir, f"nino34_climatology_{member}_{year}.nc")
+    if os.path.exists(output_path):
+        return output_path
+
+    os.makedirs(cache_dir, exist_ok=True)
+    result = subprocess.run(
+        [python_exe, script_path,
+         "--sst-dir", sst_dir,
+         "--member", member,
+         "--year", str(year),
+         "--output", output_path],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"build_climatology.py failed: {result.stderr.strip()}")
+    return output_path
+
+
 def run_check_warming(python_exe: str, script_path: str, history_file: str,
                        climatology_file: str, year: int, threshold: float) -> dict:
     result = subprocess.run(

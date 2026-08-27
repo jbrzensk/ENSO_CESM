@@ -257,6 +257,61 @@ def test_submit_orchestrator_self_failure_error_includes_qsub_stderr(monkeypatch
         )
 
 
+def test_build_climatology_invokes_script_when_not_cached(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    captured = {}
+
+    def fake_run(cmd, capture_output, text):
+        captured["cmd"] = cmd
+        return FakeCompletedProcess(returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = jobs.build_climatology(
+        "python3", "build_climatology.py", "/sst/dir", "LE2-1011.001", 2045, str(cache_dir),
+    )
+
+    expected_output = str(cache_dir / "nino34_climatology_LE2-1011.001_2045.nc")
+    assert result == expected_output
+    assert captured["cmd"] == [
+        "python3", "build_climatology.py",
+        "--sst-dir", "/sst/dir", "--member", "LE2-1011.001",
+        "--year", "2045", "--output", expected_output,
+    ]
+    # build_climatology() creates the cache directory itself.
+    assert cache_dir.is_dir()
+
+
+def test_build_climatology_skips_rebuild_when_cache_file_already_exists(tmp_path, monkeypatch):
+    cache_dir = tmp_path
+    output_path = cache_dir / "nino34_climatology_LE2-1011.001_2045.nc"
+    output_path.write_text("already built")
+
+    def fake_run(*a, **k):
+        raise AssertionError("subprocess.run should not be called when the cache file exists")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = jobs.build_climatology(
+        "python3", "build_climatology.py", "/sst/dir", "LE2-1011.001", 2045, str(cache_dir),
+    )
+
+    assert result == str(output_path)
+
+
+def test_build_climatology_raises_on_nonzero_exit(monkeypatch, tmp_path):
+    def fake_run(cmd, capture_output, text):
+        return FakeCompletedProcess(stderr="no SST tseries files found", returncode=1)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="no SST tseries files found"):
+        jobs.build_climatology(
+            "python3", "build_climatology.py", "/sst/dir", "LE2-1011.001", 2045,
+            str(tmp_path / "cache"),
+        )
+
+
 def test_run_check_warming_parses_json_stdout(monkeypatch):
     def fake_run(cmd, capture_output, text):
         return FakeCompletedProcess(
