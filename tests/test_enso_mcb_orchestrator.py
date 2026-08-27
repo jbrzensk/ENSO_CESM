@@ -21,6 +21,7 @@ def config_file(tmp_path):
         scratchroot: "{tmp_path}/scratch"
         climatology_sst_dir: "{tmp_path}/sst_tseries"
         climatology_cache_dir: "{tmp_path}/climatology_cache"
+        climatology_forcing_variant: "smbb"
         build_climatology_script: "build_climatology.py"
         warming_threshold_c: 1.0
         end_year: 2100
@@ -85,8 +86,9 @@ def test_run_cycle_derives_climatology_member_from_ens_and_passes_result_through
 
     orch.run_cycle(state_file, config_file)
 
-    (python_exe, script, sst_dir, member, year, cache_dir) = climatology_calls["args"]
+    (python_exe, script, sst_dir, member, variant, year, cache_dir) = climatology_calls["args"]
     assert member == "LE2-1051.001"  # derived from config's ens: "1051"
+    assert variant == "smbb"
     assert year == 2054
     assert script == "build_climatology.py"
 

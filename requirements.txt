@@ -1,4 +1,8 @@
-xarray>=2023.1.0
+# build_climatology.py needs xr.coders.CFDatetimeCoder and decode_times=
+# <coder>, added in xarray's 2024.11/2025.01 releases -- confirm this floor
+# is still accurate for whatever xarray actually ends up installed on
+# Derecho (see docs/RUNBOOK.md's pre-flight checklist).
+xarray>=2024.11.0
 netCDF4>=1.6.0
 numpy>=1.24.0
 PyYAML>=6.0

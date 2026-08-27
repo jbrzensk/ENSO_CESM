@@ -9,22 +9,34 @@ scratchroot: "/glade/derecho/scratch/walkerl"
 
 # Confirmed directory of CESM2-LE monthly SST tseries files (one file per
 # ensemble member per ~10-year chunk, e.g.
-# b.e21.BSSP370cmip6.f09_g17.LE2-1011.001.pop.h.SST.201501-202412.nc).
+# b.e21.BSSP370smbb.f09_g17.LE2-1011.001.pop.h.SST.201501-202412.nc).
 # build_climatology.py globs this directory for the member matching this
 # lineage's `ens` (LE2-{ens}.001) to build a rolling 30-year June
 # climatology for whatever year the pipeline is currently checking.
 climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST"
 
-# Where per-year built climatology files are cached (one per lineage/year,
-# named nino34_climatology_LE2-{ens}.001_{year}.nc). A previously-built
-# year's file is reused rather than rebuilt.
+# Where per-year built climatology files are cached (one per variant/
+# lineage/year, named nino34_climatology_{variant}_LE2-{ens}.001_{year}.nc).
+# A previously-built (variant, member, year) file is reused, not rebuilt.
 climatology_cache_dir: "/glade/work/walkerl/enso_mcb_automation/climatology_cache"
+
+# CESM2-LE ships two forcing ensembles under the same member numbers
+# ("cmip6", the full ~100-member ensemble, and "smbb", the biomass-burning
+# variant) — this substring narrows build_climatology.py's file matching to
+# the correct one. This experiment's own scripts are all built on "smbb"
+# (see create_ENSO_controller_case.sh's refcase), matching `compset` above.
+climatology_forcing_variant: "smbb"
 
 warming_threshold_c: 1.0
 end_year: 2100
 notification_email: "walkerl@example.edu"
 
-python_exe: "python3"
+# The orchestrator's own subprocess calls (check_warming.py,
+# build_climatology.py) need the venv's xarray/netCDF4/PyYAML, not the bare
+# system interpreter. This path is relative to the orchestrator's cwd,
+# which orchestrator_wrapper.sh sets to $PBS_O_WORKDIR (the repo checkout)
+# before running anything.
+python_exe: ".venv/bin/python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"
 build_climatology_script: "build_climatology.py"

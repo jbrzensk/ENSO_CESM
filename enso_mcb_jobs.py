@@ -148,14 +148,16 @@ def set_batch_mail(case_dir: str, email: str) -> None:
 
 
 def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: str,
-                       year: int, cache_dir: str) -> str:
+                       variant: str, year: int, cache_dir: str) -> str:
     """Build (or reuse) this year's rolling climatology file for `member`.
 
-    The climatology only depends on (member, year), never on anything that
-    changes cycle to cycle, so a previously-built file for the same year is
-    reused rather than rebuilt.
+    The climatology only depends on (variant, member, year), never on
+    anything that changes cycle to cycle, so a previously-built file for the
+    same (variant, member, year) is reused rather than rebuilt. `variant`
+    is included in the cache key so two different forcing variants (e.g.
+    "smbb" vs "cmip6") for the same member/year never collide on one file.
     """
-    output_path = os.path.join(cache_dir, f"nino34_climatology_{member}_{year}.nc")
+    output_path = os.path.join(cache_dir, f"nino34_climatology_{variant}_{member}_{year}.nc")
     if os.path.exists(output_path):
         return output_path
 
@@ -164,6 +166,7 @@ def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: s
         [python_exe, script_path,
          "--sst-dir", sst_dir,
          "--member", member,
+         "--forcing-variant", variant,
          "--year", str(year),
          "--output", output_path],
         capture_output=True, text=True,

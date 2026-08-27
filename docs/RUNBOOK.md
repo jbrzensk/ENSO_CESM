@@ -11,17 +11,55 @@ full design.
    - `climatology_sst_dir`: confirmed to be
      `/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST`
      — the CESM2-LE archive of monthly SST tseries files (one file per
-     ensemble member per ~10-year chunk, both `BHISTcmip6` historical and
-     `BSSP370cmip6` scenario phases live in this same directory).
-     `build_climatology.py` builds each cycle's rolling 30-year June
-     climatology from here, for the ensemble member matching this
-     lineage's `ens` (`LE2-{ens}.001`) — confirmed via a real file's
-     `ncdump -h` to carry `SST`, `TAREA`, `TLAT`, `TLONG` exactly as
-     `check_warming.py` expects, so no variable-name overrides are needed
-     for this data source.
+     ensemble member per ~10-year chunk, both historical and SSP370
+     scenario phases live in this same directory). `build_climatology.py`
+     builds each cycle's rolling 30-year June climatology from here, for
+     the ensemble member matching this lineage's `ens` (`LE2-{ens}.001`).
+     A real file's `ncdump -h` confirms `SST`/`TAREA`/`TLAT`/`TLONG` are
+     present in exactly the shape `check_warming.py` expects, so no
+     variable-name overrides are needed for this data source — **but a
+     header dump cannot confirm the time-stamp convention** (see the
+     verification step below, which is the one part of this that
+     genuinely needed checking against real data, not just the header).
+   - `climatology_forcing_variant`: CESM2-LE ships two forcing ensembles
+     under the same member numbers ("cmip6", the full ensemble, and
+     "smbb", the biomass-burning variant this experiment actually uses —
+     matching `compset: BSSP370smbb` above and the refcase in
+     `create_ENSO_controller_case.sh`). **Before first use, `ls` the
+     `climatology_sst_dir` for each of this deployment's `ens` values
+     (1011, 1031, 1051) and confirm an `LE2-{ens}.001` member matching
+     the `smbb` variant actually exists** — CESM2-LE's macro-initialization
+     scheme pairs specific member ordinals with specific initialization
+     years, so `LE2-1031.001`/`LE2-1051.001` existing at all (as opposed
+     to e.g. `LE2-1031.002`) is not guaranteed and needs a real directory
+     listing to confirm, not an assumption from the member-numbering
+     pattern alone. If a different ordinal turns out to be right for a
+     given `ens`, that lineage needs its own config file with the correct
+     value, since `build_climatology.py` only ever tries `LE2-{ens}.001`.
+   - **Verify the time-stamp convention** on one real SST tseries file
+     before trusting any climatology this produces:
+     ```bash
+     ncdump -v time,time_bound b.e21.BSSP370smbb.f09_g17.LE2-1011.001.pop.h.SST.<some-range>.nc | tail -30
+     ```
+     POP conventionally stamps a monthly mean's `time` value at the *end*
+     of its averaging interval (a June mean's raw `time` can fall on
+     July 1) rather than within the averaged month — `build_climatology.py`
+     accounts for this by using `time_bound`'s interval start (which lands
+     exactly on the 1st of the true averaged month) whenever `time_bound`
+     is present, falling back to the raw `time` value only if it is
+     absent. Confirm the file actually has `time:bounds = "time_bound"`
+     and that `time_bound`'s first column for a known June entry reads
+     `<year>-06-01` — if the real convention differs from this, the
+     climatology will be silently off by one month, which biases every
+     year's anomaly low against the warming threshold without any error
+     or symptom.
    - `climatology_cache_dir`: where per-year built climatology files are
      cached. Needs to exist or be creatable by the orchestrator's PBS job
-     user; it's created automatically on first use if missing.
+     user; it's created automatically on first use if missing. Cached
+     files are keyed on `(forcing_variant, member, year)`, so fixing a
+     mistake in either of the two verification steps above requires
+     deleting any already-built files in this directory before the next
+     cycle — nothing detects staleness automatically.
    - `notification_email`: where PBS should send failure/abort emails.
    - Confirm `caseroot`, `scratchroot`, `srcdir`, `tagdir` match your
      actual Derecho paths.

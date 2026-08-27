@@ -37,7 +37,8 @@ def run_cycle(state_file: str, config_file: str) -> None:
         member = f"LE2-{config['ens']}.001"
         climatology_file = jobs.build_climatology(
             config["python_exe"], config["build_climatology_script"],
-            config["climatology_sst_dir"], member, state.year,
+            config["climatology_sst_dir"], member,
+            config["climatology_forcing_variant"], state.year,
             config["climatology_cache_dir"],
         )
         warming_result = jobs.run_check_warming(

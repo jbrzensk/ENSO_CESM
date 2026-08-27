@@ -106,9 +106,12 @@ kicks off the first `RUNNING` segment.
   warming" is a normal result communicated via the JSON, not a failure.
 - **Threshold:** read from config (default 1.0°C), not hardcoded.
 
-> **Open item:** the exact Niño3.4 climatology reference file path is TBD —
-> the user will supply it before this runs for real. It's a config value,
-> not something baked into code.
+> **Resolved:** the climatology is not a single fixed file — it's a rolling
+> 30-year June baseline built on demand from the CESM2-LE archive by
+> `build_climatology.py`. See `docs/RUNBOOK.md`'s pre-flight checklist
+> (item 1) for the real data source, the confirmed/unconfirmed facts about
+> it, and what still needs verifying against real data before production
+> use.
 
 ### `create_branch_case.sh`
 
