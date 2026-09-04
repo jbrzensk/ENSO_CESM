@@ -67,28 +67,33 @@ full design.
      mistake in either of the two verification steps above requires
      deleting any already-built files in this directory before the next
      cycle — nothing detects staleness automatically.
-   - `notification_email`: where PBS should send failure/abort emails.
    - Confirm `caseroot`, `scratchroot`, `srcdir`, `tagdir` match your
      actual Derecho paths.
 
 2. Verify short-term archiving is on for your initial reference case
    (the case you'll pass as `--initial-refcase`):
+
    ```bash
    cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
    ./xmlquery DOUT_S
+
+   DOUT_S: TRUE
    ```
+
    This must print `TRUE`. The orchestrator's self-resubmission depends
    on the archive (`st_archive`) job, not just the run job — if
    archiving is off, the dependency chain has nothing to depend on.
 
 3. Verify how `case.submit` reports job IDs on this system, and how POP
    writes monthly-mean history file paths/names, against a real case:
+
    ```bash
    cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
    ./case.submit
    # note the job ID format printed for the run job vs. the st_archive job
    ls /glade/derecho/scratch/jabrzenski/archive/<initial-refcase>/ocn/hist/
    ```
+
    `enso_mcb_jobs.parse_last_job_id` and
    `enso_mcb_orchestrator.history_file_path` assume a specific format
    (see the spec's "Open item" notes). If what you see differs, adjust
@@ -102,26 +107,10 @@ full design.
    "archive" as part of a path (e.g. the `DOUT_S_ROOT` line), because a job
    ID cannot be parsed reliably out of a case-name path.
 
-4. Verify the CIME variable names used to configure job email, on a real
-   case:
-   ```bash
-   cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
-   ./xmlquery BATCH_MAIL_TO BATCH_MAIL_TYPE
-   ```
-   **This is unverified against this CESM/CIME version.**
-   `create_branch_case.sh` and `enso_mcb_jobs.set_batch_mail()` both run
-   `./xmlchange BATCH_MAIL_TO=... BATCH_MAIL_TYPE=...`. If `xmlquery`
-   reports those are not recognized IDs, find the correct ones for this
-   CIME version (the likely alternatives are `MAIL_USER` and `MAIL_TYPE`;
-   `./xmlquery --listall | grep -i mail` will show what exists) and update
-   **both** `create_branch_case.sh` and `enso_mcb_jobs.set_batch_mail()`
-   before bootstrapping. Getting this wrong means either a hard xmlchange
-   failure on the first cycle, or silently no failure emails.
-
-5. Confirm the PBS queue for the orchestrator job itself
+4. Confirm the PBS queue for the orchestrator job itself
    (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
    The orchestrator job is short (about a minute, except on branch cycles
-   where it blocks on `case.build` — see item 7) but runs once per
+   where it blocks on `case.build` — see item 6) but runs once per
    cycle for decades. Check NCAR/Derecho's **current** queue and billing
    policies for short, frequent, small jobs (the wrapper currently requests
    8 cores so the branch-cycle build has cores to use) — this repo cannot
@@ -130,7 +119,7 @@ full design.
    `orchestrator_wrapper.sh`, so no script edit is needed. The same
    applies to `project`, passed as `qsub -A`.
 
-6. Confirm the venv exists in the repo checkout on Derecho. The
+5. Confirm the venv exists in the repo checkout on Derecho. The
    orchestrator needs `xarray`/`netCDF4`/`PyYAML`, and
    `orchestrator_wrapper.sh` runs `$PBS_O_WORKDIR/.venv/bin/python3`:
    ```bash
@@ -138,7 +127,7 @@ full design.
    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
    ```
 
-7. **Time one real `case.build` and size the orchestrator's PBS job to
+6. **Time one real `case.build` and size the orchestrator's PBS job to
    match.** On the cycle where warming is detected, the orchestrator job
    runs `create_branch_case.sh` synchronously, and that script's
    `./case.build` step runs *inside the orchestrator's own PBS job*. The
@@ -158,7 +147,6 @@ full design.
    cd /glade/u/home/jabrzenski/github/ENSO_CESM
    time env ENS=1051 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
        STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=3 MCB_ON=1 \
-       NOTIFICATION_EMAIL=jabrzenski@ucsd.edu \
        bash create_branch_case.sh
    ```
 
@@ -172,7 +160,7 @@ full design.
    assuming more `ncpus` will speed anything up. Delete the throwaway
    `branch.999` case directory and its run directory afterwards.
 
-8. **Know where to look if a live build or submit fails on the
+7. **Know where to look if a live build or submit fails on the
    environment.** `create_branch_case.sh` is not run with the full ambient
    environment: `enso_mcb_jobs.create_branch_case()` builds the subprocess
    env from an explicit allowlist, `PASSTHROUGH_ENV_VARS` (top of
@@ -213,10 +201,9 @@ explicitly.
 
 Bootstrapping forces the XML settings the pipeline requires onto the
 adopted case (`RESUBMIT=0`, `STOP_OPTION=nmonths`, `DOUT_S=TRUE`,
-`REST_OPTION=nmonths`, `REST_N=1`), configures the mail settings,
-resubmits the case for a 12-month segment, and chains the first
-orchestrator job dependent on its archive job. From here, the chain runs
-itself.
+`REST_OPTION=nmonths`, `REST_N=1`), resubmits the case for a 12-month
+segment, and chains the first orchestrator job dependent on its archive
+job. From here, the chain runs itself.
 
 `RESUBMIT=0` matters: the manual `create_ENSO_controller_case.sh` sets
 `RESUBMIT=3`, and if that were left in place CIME's own auto-resubmit

@@ -37,7 +37,6 @@ climatology_forcing_variant: "smbb"
 
 warming_threshold_c: 1.0
 end_year: 2100
-notification_email: "jabrzenski@ucsd.edu"
 
 # The orchestrator's own subprocess calls (check_warming.py,
 # build_climatology.py) need the venv's xarray/netCDF4/PyYAML, not the bare

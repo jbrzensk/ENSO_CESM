@@ -55,9 +55,9 @@ logic can be exercised without creating or building a real case.
 
 This automation has not yet run a real production cycle on Derecho. Several
 integration points are explicitly unverified against the real system —
-`case.submit`'s job-ID output format, POP history file naming, the CIME
-variable names for batch mail, and real `case.build` timing — and must be
-confirmed before the first bootstrap. See the **pre-flight checklist** at
+`case.submit`'s job-ID output format, POP history file naming, and real
+`case.build` timing — and must be confirmed before the first bootstrap.
+See the **pre-flight checklist** at
 the top of [docs/RUNBOOK.md](docs/RUNBOOK.md#pre-flight-checklist-do-this-once-before-the-first-bootstrap)
 before relying on this for a real experiment.
 

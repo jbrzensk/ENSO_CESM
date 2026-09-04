@@ -27,7 +27,7 @@ def make_fake_run(calls, handler=None):
 
 CREATE_BRANCH_ARGS = (
     "create_branch_case.sh", "1051", "refcase-1", 9, "2054-06-01", 3, True,
-    "/glade/work/jabrzenski/cases", "jabrzenski@ucsd.edu",
+    "/glade/work/jabrzenski/cases",
     "f09_g17", "BSSP370smbb", "UCSD0083",
     "/glade/work/jabrzenski/MCB_mods", "/glade/work/jabrzenski/cesm_tags/cesm2.1.5",
     "/glade/derecho/scratch/jabrzenski",
@@ -187,18 +187,6 @@ def test_flip_mcb_off_replaces_namelist_line(tmp_path, monkeypatch):
     assert calls == [(["./preview_namelists"], str(tmp_path))]
 
 
-def test_set_batch_mail_runs_expected_xmlchange_calls(monkeypatch):
-    calls = []
-    monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
-
-    jobs.set_batch_mail("/fake/case", "jabrzenski@ucsd.edu")
-
-    assert calls == [
-        (["./xmlchange", "BATCH_MAIL_TO=jabrzenski@ucsd.edu"], "/fake/case"),
-        (["./xmlchange", "BATCH_MAIL_TYPE=begin,end,fail"], "/fake/case"),
-    ]
-
-
 def test_failed_command_error_includes_captured_stdout_and_stderr(monkeypatch):
     def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
         raise subprocess.CalledProcessError(
@@ -253,7 +241,7 @@ def test_submit_orchestrator_self_failure_error_includes_qsub_stderr(monkeypatch
 
     with pytest.raises(RuntimeError, match="Unknown queue"):
         jobs.submit_orchestrator_self(
-            "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "w@example.edu",
+            "orchestrator_wrapper.sh", "55555", "/glade/work/state.json",
         )
 
 
@@ -381,7 +369,6 @@ def test_create_branch_case_returns_parsed_casedir(monkeypatch):
     env = captured["env"]
     assert env["REFCASE"] == "refcase-1"
     assert env["MCB_ON"] == "1"
-    assert env["NOTIFICATION_EMAIL"] == "jabrzenski@ucsd.edu"
 
 
 def test_create_branch_case_passes_every_configurable_variable(monkeypatch):
@@ -457,11 +444,11 @@ def test_submit_orchestrator_self_builds_qsub_dependency_command(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     job_id = jobs.submit_orchestrator_self(
-        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "jabrzenski@ucsd.edu",
+        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json",
     )
 
     assert captured["cmd"] == [
-        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "jabrzenski@ucsd.edu",
+        "qsub", "-W", "depend=afterok:55555",
         "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
     ]
     assert job_id == "66666.derecho"
@@ -477,12 +464,12 @@ def test_submit_orchestrator_self_passes_project_and_queue_when_given(monkeypatc
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     jobs.submit_orchestrator_self(
-        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "jabrzenski@ucsd.edu",
+        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json",
         project="UCSD0083", queue="develop",
     )
 
     assert captured["cmd"] == [
-        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "jabrzenski@ucsd.edu",
+        "qsub", "-W", "depend=afterok:55555",
         "-A", "UCSD0083", "-q", "develop",
         "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
     ]

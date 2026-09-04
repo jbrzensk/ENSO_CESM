@@ -104,22 +104,6 @@ def test_fails_before_mutating_anything_when_case_dir_exists(tmp_path):
     assert "create_newcase" not in result.stdout
 
 
-def test_dry_run_sets_batch_mail_when_notification_email_provided():
-    env = dict(BASE_ENV, NOTIFICATION_EMAIL="jabrzenski@ucsd.edu")
-
-    result = run_script(env)
-
-    assert "BATCH_MAIL_TO=jabrzenski@ucsd.edu" in result.stdout
-    assert "BATCH_MAIL_TYPE=begin,end,fail" in result.stdout
-
-
-def test_dry_run_skips_batch_mail_when_notification_email_unset():
-    result = run_script(BASE_ENV)
-
-    assert "BATCH_MAIL_TO" not in result.stdout
-    assert "BATCH_MAIL_TYPE" not in result.stdout
-
-
 def test_dry_run_appends_mcb_line_when_mcb_on():
     result = run_script(BASE_ENV)
 

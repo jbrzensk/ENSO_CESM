@@ -14,9 +14,6 @@ set -euo pipefail
 # Optional environment variables (fall back to the current experiment's
 # defaults if unset):
 #   RESOLN, COMPSET, PROJECT, SRCDIR, TAGDIR, CASEROOT, SCRATCHROOT
-#   NOTIFICATION_EMAIL - if set, configures CIME to email this address on
-#                        job begin/end/fail (BATCH_MAIL_TO/BATCH_MAIL_TYPE);
-#                        if unset, no mail xmlchange calls are made.
 #
 # Creates, configures and *builds* the case. On success, prints
 # "CASEDIR=<path>" as the last line of stdout.
@@ -36,7 +33,6 @@ SRCDIR="${SRCDIR:-/glade/work/jabrzenski/cases/ENSO_walker/MCB_mods}"
 TAGDIR="${TAGDIR:-/glade/u/home/jabrzenski/CESM/CESM2.1.5}"
 CASEROOT="${CASEROOT:-/glade/work/jabrzenski/cases/ENSO_walker}"
 SCRATCHROOT="${SCRATCHROOT:-/glade/derecho/scratch/jabrzenski}"
-NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
 
 # 10# forces base-10: an already-zero-padded BRANCH_NUMBER like "009" would
 # otherwise be parsed as octal (and "008"/"009" are invalid octal, a hard error).
@@ -101,11 +97,6 @@ echo "##### setting up case $RUNNAME #####"
   run ./xmlchange REST_OPTION=nmonths
   run ./xmlchange REST_N=1
 
-  if [ -n "$NOTIFICATION_EMAIL" ]; then
-    run ./xmlchange BATCH_MAIL_TO="$NOTIFICATION_EMAIL"
-    run ./xmlchange BATCH_MAIL_TYPE=begin,end,fail
-  fi
-
   run mkdir -p "$RUNDIR"
   run cp "$ICSDIR"/* "$RUNDIR"/.
 
@@ -128,7 +119,7 @@ EOF
   # case.build, and case.submit on an unbuilt case fails. Nobody has timed
   # a real build on this system yet — it may take well over an hour — and
   # the orchestrator blocks on it; see the walltime note in
-  # orchestrator_wrapper.sh and RUNBOOK.md pre-flight item 7.
+  # orchestrator_wrapper.sh and RUNBOOK.md pre-flight item 6.
   run ./case.build
 )
 

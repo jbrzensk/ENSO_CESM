@@ -130,7 +130,7 @@ recover from each.
 | `enso_mcb_decision.py` | `decide_transition()` — the branch/state-machine logic itself. A pure function: state + warming result + end year in, a `Transition` out. No I/O, no CESM calls — this is what the automated tests exercise directly. |
 | `enso_mcb_jobs.py` | Every side-effecting operation: `xmlchange` wrappers, `case.submit`/`qsub` calls, invoking `build_climatology.py`/`check_warming.py`/`create_branch_case.sh` as subprocesses, and `submit_orchestrator_self()` (the self-chaining `qsub`). |
 | `enso_mcb_state.py` | The `CycleState` dataclass, `Stage` constants, and atomic JSON load/save (write to a temp file, then `os.replace`). |
-| `enso_mcb_config.py` / `enso_mcb_config.yaml` | Required-key validation and the fixed, per-deployment knobs (paths, project, threshold, end year, notification email, etc.). |
+| `enso_mcb_config.py` / `enso_mcb_config.yaml` | Required-key validation and the fixed, per-deployment knobs (paths, project, threshold, end year, etc.). |
 | `check_warming.py` | The El Niño check: Niño3.4 SST anomaly vs. a climatology reference, threshold comparison, JSON result. |
 | `build_climatology.py` | Builds (and caches) the rolling 30-year June Niño3.4 climatology baseline used by `check_warming.py`. |
 | `create_branch_case.sh` | Parameterized (via environment variables) CESM branch-case creator, called programmatically by the orchestrator for every `MCB_ON` branch. Supports `DRY_RUN=1` to print the commands it would run instead of executing them. |

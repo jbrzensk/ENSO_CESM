@@ -64,7 +64,7 @@ def run_cycle(state_file: str, config_file: str) -> None:
         casedir = jobs.create_branch_case(
             config["create_branch_case_script"], config["ens"], transition.ref_case,
             transition.next_branch_number, transition.start_date, transition.stop_n,
-            transition.mcb_on, config["caseroot"], config["notification_email"],
+            transition.mcb_on, config["caseroot"],
             config["resoln"], config["compset"], config["project"],
             config["srcdir"], config["tagdir"], config["scratchroot"],
         )
@@ -86,7 +86,7 @@ def run_cycle(state_file: str, config_file: str) -> None:
     save_state(state_file, state)
 
     jobs.submit_orchestrator_self(
-        config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["orchestrator_wrapper_script"], job_id, state_file,
         config["project"], config["orchestrator_queue"],
     )
 
@@ -105,10 +105,9 @@ def bootstrap(state_file: str, config_file: str, lineage_name: str,
     # settings (notably RESUBMIT>0) that conflict with orchestrated running,
     # so force the pipeline's requirements before the first submission.
     jobs.configure_case_for_orchestration(casedir)
-    jobs.set_batch_mail(casedir, config["notification_email"])
     job_id = jobs.resubmit_case(casedir, 12)
     jobs.submit_orchestrator_self(
-        config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["orchestrator_wrapper_script"], job_id, state_file,
         config["project"], config["orchestrator_queue"],
     )
 
