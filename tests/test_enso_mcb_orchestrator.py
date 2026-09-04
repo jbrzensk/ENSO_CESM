@@ -22,10 +22,11 @@ def config_file(tmp_path):
         climatology_sst_dir: "{tmp_path}/sst_tseries"
         climatology_cache_dir: "{tmp_path}/climatology_cache"
         climatology_forcing_variant: "smbb"
+        climatology_member_ordinal: "003"
         build_climatology_script: "build_climatology.py"
         warming_threshold_c: 1.0
         end_year: 2100
-        notification_email: "walkerl@example.edu"
+        notification_email: "jabrzenski@ucsd.edu"
         python_exe: "python3"
         check_warming_script: "check_warming.py"
         create_branch_case_script: "create_branch_case.sh"
@@ -72,7 +73,7 @@ def test_run_cycle_branches_to_mcb_on_when_warming_detected(monkeypatch, config_
     assert submitted_self["queue"] == "main"
 
 
-def test_run_cycle_derives_climatology_member_from_ens_and_passes_result_through(
+def test_run_cycle_derives_climatology_member_from_ens_and_ordinal_and_passes_result_through(
         monkeypatch, config_file, state_file):
     climatology_calls = {}
     monkeypatch.setattr(jobs, "build_climatology",
@@ -87,7 +88,7 @@ def test_run_cycle_derives_climatology_member_from_ens_and_passes_result_through
     orch.run_cycle(state_file, config_file)
 
     (python_exe, script, sst_dir, member, variant, year, cache_dir) = climatology_calls["args"]
-    assert member == "LE2-1051.001"  # derived from config's ens: "1051"
+    assert member == "LE2-1051.003"  # derived from config's ens "1051" + climatology_member_ordinal "003"
     assert variant == "smbb"
     assert year == 2054
     assert script == "build_climatology.py"
@@ -118,7 +119,7 @@ def test_run_cycle_passes_every_configured_value_to_create_branch_case(
     assert startdate == "2054-06-01"
     assert (stop_n, mcb_on) == (3, True)
     assert caseroot == f"{tmp_path}/cases"
-    assert email == "walkerl@example.edu"
+    assert email == "jabrzenski@ucsd.edu"
     assert resoln == "f09_g17"
     assert compset == "BSSP370smbb"
     assert project == "UCSD0083"
@@ -230,7 +231,7 @@ def test_bootstrap_creates_initial_state_and_submits_first_segment(monkeypatch, 
     # applied before the first submission.
     assert [call[0] for call in calls] == ["configure", "set_batch_mail", "resubmit_case"]
     assert calls[0][1].endswith("/cases/initial-case")
-    assert calls[1][2] == "walkerl@example.edu"
+    assert calls[1][2] == "jabrzenski@ucsd.edu"
     assert calls[2] == ("resubmit_case", calls[2][1], 12)
     assert submitted_self["job_id"] == "44444"
     assert submitted_self["project"] == "UCSD0083"

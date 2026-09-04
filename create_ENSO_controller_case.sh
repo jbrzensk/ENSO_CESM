@@ -21,21 +21,21 @@ stopn=3
 startdate='2049-06-01'
 
 #icsdir='/glade/campaign/cgd/cesm/CESM2-LE/restarts/'$refcase'/rest/'$refdate'-00000'
-icsdir='/glade/derecho/scratch/walkerl/archive/'$refcase'/rest/'$startdate'-00000'
+icsdir='/glade/derecho/scratch/jabrzenski/archive/'$refcase'/rest/'$startdate'-00000'
 
 resoln='f09_g17'
 compset='BSSP370smbb'
 project='UCSD0083'
 
-srcdir='/glade/work/walkerl/MCB_mods/bugfix_plus_namelist'
-tagdir='/glade/work/walkerl/cesm_tags/cesm2.1.5+MCBnl'
+srcdir='/glade/work/jabrzenski/cases/ENSO_walker/MCB_mods'
+tagdir='/glade/u/home/jabrzenski/CESM/CESM2.1.5'
 
-caseroot='/glade/work/walkerl/cases'
+caseroot='/glade/work/jabrzenski/cases/ENSO_walker'
 
 echo "##### setting up case "$runname" #####"
 
 casedir=$caseroot/$runname
-rundir=/glade/derecho/scratch/walkerl/$runname/run
+rundir=/glade/derecho/scratch/jabrzenski/$runname/run
 
 ##### Create case
 
@@ -59,8 +59,8 @@ echo "##### changing xml values #####"
 ./xmlchange RUN_REFCASE=$refcase
 ./xmlchange RUN_REFDATE=$startdate
 ./xmlchange RUN_STARTDATE=$startdate
-./xmlchange DOUT_S_ROOT=/glade/derecho/scratch/walkerl/archive/$runname/
-./xmlchange CIME_OUTPUT_ROOT=/glade/derecho/scratch/walkerl/
+./xmlchange DOUT_S_ROOT=/glade/derecho/scratch/jabrzenski/archive/$runname/
+./xmlchange CIME_OUTPUT_ROOT=/glade/derecho/scratch/jabrzenski/
 ./xmlchange RUNDIR=$rundir/
 
 ./xmlchange PROJECT=$project

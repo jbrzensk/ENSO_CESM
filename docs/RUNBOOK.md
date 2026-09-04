@@ -14,7 +14,8 @@ full design.
      ensemble member per ~10-year chunk, both historical and SSP370
      scenario phases live in this same directory). `build_climatology.py`
      builds each cycle's rolling 30-year June climatology from here, for
-     the ensemble member matching this lineage's `ens` (`LE2-{ens}.001`).
+     the ensemble member matching this lineage's `ens` and
+     `climatology_member_ordinal` (`LE2-{ens}.{climatology_member_ordinal}`).
      A real file's `ncdump -h` confirms `SST`/`TAREA`/`TLAT`/`TLONG` are
      present in exactly the shape `check_warming.py` expects, so no
      variable-name overrides are needed for this data source — **but a
@@ -26,16 +27,20 @@ full design.
      "smbb", the biomass-burning variant this experiment actually uses —
      matching `compset: BSSP370smbb` above and the refcase in
      `create_ENSO_controller_case.sh`). **Before first use, `ls` the
-     `climatology_sst_dir` for each of this deployment's `ens` values
-     (1011, 1031, 1051) and confirm an `LE2-{ens}.001` member matching
-     the `smbb` variant actually exists** — CESM2-LE's macro-initialization
-     scheme pairs specific member ordinals with specific initialization
-     years, so `LE2-1031.001`/`LE2-1051.001` existing at all (as opposed
-     to e.g. `LE2-1031.002`) is not guaranteed and needs a real directory
-     listing to confirm, not an assumption from the member-numbering
-     pattern alone. If a different ordinal turns out to be right for a
-     given `ens`, that lineage needs its own config file with the correct
-     value, since `build_climatology.py` only ever tries `LE2-{ens}.001`.
+     `climatology_sst_dir` for each of this deployment's `ens` values and
+     confirm an `LE2-{ens}.{ordinal}` member matching the `smbb` variant
+     actually exists** — CESM2-LE's macro-initialization scheme pairs
+     specific member ordinals with specific initialization years, so the
+     ordinal is *not* guaranteed to be `001` for every `ens` and needs a
+     real directory listing to confirm, not an assumption from the
+     member-numbering pattern alone. Set the confirmed ordinal in
+     `climatology_member_ordinal` — every lineage needs this set from its
+     own real directory listing, since `build_climatology.py` only ever
+     tries `LE2-{ens}.{climatology_member_ordinal}`. Confirmed against a
+     real listing on 2026-09-04: `ens` 1011→ordinal `001`, 1031→`002`,
+     1051→`003`, 1071→`004`, 1091→`005`, 1111→`006`, 1131→`007`,
+     1151→`008`, 1171→`009` — but confirm again for any `ens` not in this
+     list rather than extrapolating the pattern.
    - **Verify the time-stamp convention** on one real SST tseries file
      before trusting any climatology this produces:
      ```bash
@@ -52,7 +57,9 @@ full design.
      `<year>-06-01` — if the real convention differs from this, the
      climatology will be silently off by one month, which biases every
      year's anomaly low against the warming threshold without any error
-     or symptom.
+     or symptom. Confirmed against a real `LE2-1011.001` file's
+     204501-205412 chunk on 2026-09-04: `time_bound`'s June-2045 entry
+     starts exactly on 2045-06-01, matching this convention.
    - `climatology_cache_dir`: where per-year built climatology files are
      cached. Needs to exist or be creatable by the orchestrator's PBS job
      user; it's created automatically on first use if missing. Cached
@@ -67,7 +74,7 @@ full design.
 2. Verify short-term archiving is on for your initial reference case
    (the case you'll pass as `--initial-refcase`):
    ```bash
-   cd /glade/work/walkerl/cases/<initial-refcase>
+   cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
    ./xmlquery DOUT_S
    ```
    This must print `TRUE`. The orchestrator's self-resubmission depends
@@ -77,10 +84,10 @@ full design.
 3. Verify how `case.submit` reports job IDs on this system, and how POP
    writes monthly-mean history file paths/names, against a real case:
    ```bash
-   cd /glade/work/walkerl/cases/<initial-refcase>
+   cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
    ./case.submit
    # note the job ID format printed for the run job vs. the st_archive job
-   ls /glade/derecho/scratch/walkerl/archive/<initial-refcase>/ocn/hist/
+   ls /glade/derecho/scratch/jabrzenski/archive/<initial-refcase>/ocn/hist/
    ```
    `enso_mcb_jobs.parse_last_job_id` and
    `enso_mcb_orchestrator.history_file_path` assume a specific format
@@ -98,7 +105,7 @@ full design.
 4. Verify the CIME variable names used to configure job email, on a real
    case:
    ```bash
-   cd /glade/work/walkerl/cases/<initial-refcase>
+   cd /glade/work/jabrzenski/cases/ENSO_walker/<initial-refcase>
    ./xmlquery BATCH_MAIL_TO BATCH_MAIL_TYPE
    ```
    **This is unverified against this CESM/CIME version.**
@@ -127,7 +134,7 @@ full design.
    orchestrator needs `xarray`/`netCDF4`/`PyYAML`, and
    `orchestrator_wrapper.sh` runs `$PBS_O_WORKDIR/.venv/bin/python3`:
    ```bash
-   cd /glade/work/walkerl/enso_mcb_automation
+   cd /glade/u/home/jabrzenski/github/ENSO_CESM
    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
    ```
 
@@ -148,10 +155,10 @@ full design.
    exist — otherwise the restart-copy step fails before `case.build` ever
    runs and you get no timing data:
    ```bash
-   cd /glade/work/walkerl/enso_mcb_automation
+   cd /glade/u/home/jabrzenski/github/ENSO_CESM
    time env ENS=1051 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
        STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=3 MCB_ON=1 \
-       NOTIFICATION_EMAIL=walkerl@example.edu \
+       NOTIFICATION_EMAIL=jabrzenski@ucsd.edu \
        bash create_branch_case.sh
    ```
 
@@ -187,9 +194,9 @@ full design.
 ## Bootstrapping a new lineage
 
 ```bash
-cd /glade/work/walkerl/enso_mcb_automation   # wherever this repo is checked out on Derecho
+cd /glade/u/home/jabrzenski/github/ENSO_CESM   # wherever this repo is checked out on Derecho
 .venv/bin/python3 enso_mcb_orchestrator.py \
-    --state-file /glade/work/walkerl/enso_mcb_automation/state/enso_mcb_1051.json \
+    --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1051.json \
     --config-file enso_mcb_config.yaml \
     --bootstrap \
     --lineage-name enso_mcb_1051 \
@@ -220,7 +227,7 @@ resubmissions — two chains driving one case.
 
 - `qstat -u $USER` shows the currently queued/running job in the chain
   (either a CESM run/archive job pair, or the orchestrator job).
-- `cat /glade/work/walkerl/enso_mcb_automation/state/<lineage>.json` shows
+- `cat /glade/u/home/jabrzenski/github/ENSO_CESM/state/<lineage>.json` shows
   the current stage, case, branch number, and year — it records where the
   lineage got to, but see the warning below: it is **not** updated when a
   CESM job fails, so "state file plus `qstat`" together are the real
@@ -255,7 +262,7 @@ failed, `case.submit`/`qsub` rejecting the job, a `case.build` failure.
    the corresponding submission succeeded.
 4. Resume by running the orchestrator directly:
    ```bash
-   cd /glade/work/walkerl/enso_mcb_automation
+   cd /glade/u/home/jabrzenski/github/ENSO_CESM
    .venv/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
    ```
 

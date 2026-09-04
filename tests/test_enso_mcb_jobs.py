@@ -27,10 +27,10 @@ def make_fake_run(calls, handler=None):
 
 CREATE_BRANCH_ARGS = (
     "create_branch_case.sh", "1051", "refcase-1", 9, "2054-06-01", 3, True,
-    "/glade/work/walkerl/cases", "walkerl@example.edu",
+    "/glade/work/jabrzenski/cases", "jabrzenski@ucsd.edu",
     "f09_g17", "BSSP370smbb", "UCSD0083",
-    "/glade/work/walkerl/MCB_mods", "/glade/work/walkerl/cesm_tags/cesm2.1.5",
-    "/glade/derecho/scratch/walkerl",
+    "/glade/work/jabrzenski/MCB_mods", "/glade/work/jabrzenski/cesm_tags/cesm2.1.5",
+    "/glade/derecho/scratch/jabrzenski",
 )
 
 
@@ -79,7 +79,7 @@ def test_parse_last_job_id_falls_back_to_last_line_without_archive_line():
 
 def test_parse_last_job_id_ignores_archive_paths_in_non_submission_lines():
     output = (
-        "Setting DOUT_S_ROOT to /glade/derecho/scratch/walkerl/archive/"
+        "Setting DOUT_S_ROOT to /glade/derecho/scratch/jabrzenski/archive/"
         "b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1051.branch.009\n"
         "Submitted job id is 12346.desched1\n"
     )
@@ -92,7 +92,7 @@ def test_parse_last_job_id_ignores_archive_paths_in_non_submission_lines():
 
 def test_parse_last_job_id_prefers_st_archive_line_despite_archive_paths():
     output = (
-        "Setting DOUT_S_ROOT to /glade/derecho/scratch/walkerl/archive/"
+        "Setting DOUT_S_ROOT to /glade/derecho/scratch/jabrzenski/archive/"
         "b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1051.branch.009\n"
         "Submitted job case.run with id 12345.desched1\n"
         "Submitted job case.st_archive with id 12346.desched1\n"
@@ -191,10 +191,10 @@ def test_set_batch_mail_runs_expected_xmlchange_calls(monkeypatch):
     calls = []
     monkeypatch.setattr(subprocess, "run", make_fake_run(calls))
 
-    jobs.set_batch_mail("/fake/case", "walkerl@example.edu")
+    jobs.set_batch_mail("/fake/case", "jabrzenski@ucsd.edu")
 
     assert calls == [
-        (["./xmlchange", "BATCH_MAIL_TO=walkerl@example.edu"], "/fake/case"),
+        (["./xmlchange", "BATCH_MAIL_TO=jabrzenski@ucsd.edu"], "/fake/case"),
         (["./xmlchange", "BATCH_MAIL_TYPE=begin,end,fail"], "/fake/case"),
     ]
 
@@ -370,18 +370,18 @@ def test_create_branch_case_returns_parsed_casedir(monkeypatch):
     def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
         captured["env"] = env
         return FakeCompletedProcess(
-            stdout="##### done #####\nCASEDIR=/glade/work/walkerl/cases/branch.009\n"
+            stdout="##### done #####\nCASEDIR=/glade/work/jabrzenski/cases/branch.009\n"
         )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     casedir = jobs.create_branch_case(*CREATE_BRANCH_ARGS)
 
-    assert casedir == "/glade/work/walkerl/cases/branch.009"
+    assert casedir == "/glade/work/jabrzenski/cases/branch.009"
     env = captured["env"]
     assert env["REFCASE"] == "refcase-1"
     assert env["MCB_ON"] == "1"
-    assert env["NOTIFICATION_EMAIL"] == "walkerl@example.edu"
+    assert env["NOTIFICATION_EMAIL"] == "jabrzenski@ucsd.edu"
 
 
 def test_create_branch_case_passes_every_configurable_variable(monkeypatch):
@@ -403,10 +403,10 @@ def test_create_branch_case_passes_every_configurable_variable(monkeypatch):
     assert env["RESOLN"] == "f09_g17"
     assert env["COMPSET"] == "BSSP370smbb"
     assert env["PROJECT"] == "UCSD0083"
-    assert env["SRCDIR"] == "/glade/work/walkerl/MCB_mods"
-    assert env["TAGDIR"] == "/glade/work/walkerl/cesm_tags/cesm2.1.5"
-    assert env["CASEROOT"] == "/glade/work/walkerl/cases"
-    assert env["SCRATCHROOT"] == "/glade/derecho/scratch/walkerl"
+    assert env["SRCDIR"] == "/glade/work/jabrzenski/MCB_mods"
+    assert env["TAGDIR"] == "/glade/work/jabrzenski/cesm_tags/cesm2.1.5"
+    assert env["CASEROOT"] == "/glade/work/jabrzenski/cases"
+    assert env["SCRATCHROOT"] == "/glade/derecho/scratch/jabrzenski"
 
 
 def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
@@ -429,7 +429,7 @@ def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
 
     env = captured["env"]
     assert env["PROJECT"] == "UCSD0083"
-    assert env["CASEROOT"] == "/glade/work/walkerl/cases"
+    assert env["CASEROOT"] == "/glade/work/jabrzenski/cases"
     assert env["MCB_ON"] == "1"
     assert "STRAY_VARIABLE" not in env
     # PATH is passed through deliberately: the script needs it to find bash,
@@ -457,11 +457,11 @@ def test_submit_orchestrator_self_builds_qsub_dependency_command(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     job_id = jobs.submit_orchestrator_self(
-        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "walkerl@example.edu",
+        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "jabrzenski@ucsd.edu",
     )
 
     assert captured["cmd"] == [
-        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "walkerl@example.edu",
+        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "jabrzenski@ucsd.edu",
         "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
     ]
     assert job_id == "66666.derecho"
@@ -477,12 +477,12 @@ def test_submit_orchestrator_self_passes_project_and_queue_when_given(monkeypatc
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     jobs.submit_orchestrator_self(
-        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "walkerl@example.edu",
+        "orchestrator_wrapper.sh", "55555", "/glade/work/state.json", "jabrzenski@ucsd.edu",
         project="UCSD0083", queue="develop",
     )
 
     assert captured["cmd"] == [
-        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "walkerl@example.edu",
+        "qsub", "-W", "depend=afterok:55555", "-m", "ae", "-M", "jabrzenski@ucsd.edu",
         "-A", "UCSD0083", "-q", "develop",
         "-v", "STATE_FILE=/glade/work/state.json", "orchestrator_wrapper.sh",
     ]

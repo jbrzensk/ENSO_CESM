@@ -92,7 +92,7 @@ flowchart TD
     B --> C{stage is FAILED or DONE?}
     C -- yes --> Z[Nothing to do, exit]
     C -- no --> D{stage == RUNNING?}
-    D -- yes --> E["build_climatology.py\n(member LE2-ens.001, year Y)"]
+    D -- yes --> E["build_climatology.py\n(member LE2-ens.ordinal, year Y)"]
     E --> F["check_warming.py\n(Niño3.4 anomaly vs. threshold)"]
     F --> G[decide_transition]
     D -- no --> G

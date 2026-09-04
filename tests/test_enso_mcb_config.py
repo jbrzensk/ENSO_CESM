@@ -18,6 +18,7 @@ VALID_CONFIG = textwrap.dedent("""\
     climatology_sst_dir: "/tmp/sst_tseries"
     climatology_cache_dir: "/tmp/climatology_cache"
     climatology_forcing_variant: "smbb"
+    climatology_member_ordinal: "003"
     build_climatology_script: "build_climatology.py"
     warming_threshold_c: 1.0
     end_year: 2100

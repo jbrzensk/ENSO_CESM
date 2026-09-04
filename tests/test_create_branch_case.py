@@ -105,11 +105,11 @@ def test_fails_before_mutating_anything_when_case_dir_exists(tmp_path):
 
 
 def test_dry_run_sets_batch_mail_when_notification_email_provided():
-    env = dict(BASE_ENV, NOTIFICATION_EMAIL="walkerl@example.edu")
+    env = dict(BASE_ENV, NOTIFICATION_EMAIL="jabrzenski@ucsd.edu")
 
     result = run_script(env)
 
-    assert "BATCH_MAIL_TO=walkerl@example.edu" in result.stdout
+    assert "BATCH_MAIL_TO=jabrzenski@ucsd.edu" in result.stdout
     assert "BATCH_MAIL_TYPE=begin,end,fail" in result.stdout
 
 

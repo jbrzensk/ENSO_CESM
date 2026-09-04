@@ -31,10 +31,14 @@ def run_cycle(state_file: str, config_file: str) -> None:
     warming_result = None
     if state.stage == Stage.RUNNING:
         # Each lineage's climatology is built from the CESM2-LE ensemble
-        # member matching its own `ens` (LE2-{ens}.001), keeping every
-        # lineage's warming baseline consistent with its own background
-        # trajectory.
-        member = f"LE2-{config['ens']}.001"
+        # member matching its own `ens`, keeping every lineage's warming
+        # baseline consistent with its own background trajectory. The
+        # ordinal suffix (LE2-{ens}.{ordinal}) is not derivable from `ens`
+        # alone — CESM2-LE's macro-initialization scheme pairs specific
+        # ordinals with specific `ens` values, confirmed per-lineage by a
+        # real archive listing (see docs/RUNBOOK.md's pre-flight checklist)
+        # rather than assumed.
+        member = f"LE2-{config['ens']}.{config['climatology_member_ordinal']}"
         climatology_file = jobs.build_climatology(
             config["python_exe"], config["build_climatology_script"],
             config["climatology_sst_dir"], member,

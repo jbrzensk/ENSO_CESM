@@ -2,23 +2,31 @@ ens: "1051"
 resoln: "f09_g17"
 compset: "BSSP370smbb"
 project: "UCSD0083"
-srcdir: "/glade/work/walkerl/MCB_mods/bugfix_plus_namelist"
-tagdir: "/glade/work/walkerl/cesm_tags/cesm2.1.5+MCBnl"
-caseroot: "/glade/work/walkerl/cases"
-scratchroot: "/glade/derecho/scratch/walkerl"
+srcdir: "/glade/work/jabrzenski/cases/ENSO_walker/MCB_mods"
+tagdir: "/glade/u/home/jabrzenski/CESM/CESM2.1.5"
+caseroot: "/glade/work/jabrzenski/cases/ENSO_walker"
+scratchroot: "/glade/derecho/scratch/jabrzenski"
 
 # Confirmed directory of CESM2-LE monthly SST tseries files (one file per
 # ensemble member per ~10-year chunk, e.g.
 # b.e21.BSSP370smbb.f09_g17.LE2-1011.001.pop.h.SST.201501-202412.nc).
 # build_climatology.py globs this directory for the member matching this
-# lineage's `ens` (LE2-{ens}.001) to build a rolling 30-year June
-# climatology for whatever year the pipeline is currently checking.
+# lineage's `ens` and `climatology_member_ordinal` below, to build a
+# rolling 30-year June climatology for whatever year the pipeline is
+# currently checking.
 climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST"
 
+# The ordinal suffix of this lineage's ensemble member (LE2-{ens}.{ordinal}).
+# NOT derivable from `ens` alone — CESM2-LE's macro-initialization scheme
+# pairs specific ordinals with specific `ens` values, so this must be
+# confirmed with a real `ls` of climatology_sst_dir before deployment (see
+# docs/RUNBOOK.md's pre-flight checklist). Confirmed for ens "1051": "003".
+climatology_member_ordinal: "003"
+
 # Where per-year built climatology files are cached (one per variant/
-# lineage/year, named nino34_climatology_{variant}_LE2-{ens}.001_{year}.nc).
+# lineage/year, named nino34_climatology_{variant}_LE2-{ens}.{ordinal}_{year}.nc).
 # A previously-built (variant, member, year) file is reused, not rebuilt.
-climatology_cache_dir: "/glade/work/walkerl/enso_mcb_automation/climatology_cache"
+climatology_cache_dir: "/glade/work/jabrzenski/cases/ENSO_walker/climatology_cache"
 
 # CESM2-LE ships two forcing ensembles under the same member numbers
 # ("cmip6", the full ~100-member ensemble, and "smbb", the biomass-burning
@@ -29,14 +37,17 @@ climatology_forcing_variant: "smbb"
 
 warming_threshold_c: 1.0
 end_year: 2100
-notification_email: "walkerl@example.edu"
+notification_email: "jabrzenski@ucsd.edu"
 
 # The orchestrator's own subprocess calls (check_warming.py,
 # build_climatology.py) need the venv's xarray/netCDF4/PyYAML, not the bare
 # system interpreter. This path is relative to the orchestrator's cwd,
 # which orchestrator_wrapper.sh sets to $PBS_O_WORKDIR (the repo checkout)
-# before running anything.
-python_exe: ".venv/bin/python3"
+# before running anything. Verify that conda has been activated, and the 
+# environment is correctly set up. The environment on derecho is
+# "ENSO_Control". The conda module needs to be loaded before running the 
+# orchestrator.
+python_exe: "python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"
 build_climatology_script: "build_climatology.py"

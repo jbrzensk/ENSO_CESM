@@ -32,10 +32,10 @@ set -euo pipefail
 RESOLN="${RESOLN:-f09_g17}"
 COMPSET="${COMPSET:-BSSP370smbb}"
 PROJECT="${PROJECT:-UCSD0083}"
-SRCDIR="${SRCDIR:-/glade/work/walkerl/MCB_mods/bugfix_plus_namelist}"
-TAGDIR="${TAGDIR:-/glade/work/walkerl/cesm_tags/cesm2.1.5+MCBnl}"
-CASEROOT="${CASEROOT:-/glade/work/walkerl/cases}"
-SCRATCHROOT="${SCRATCHROOT:-/glade/derecho/scratch/walkerl}"
+SRCDIR="${SRCDIR:-/glade/work/jabrzenski/cases/ENSO_walker/MCB_mods}"
+TAGDIR="${TAGDIR:-/glade/u/home/jabrzenski/CESM/CESM2.1.5}"
+CASEROOT="${CASEROOT:-/glade/work/jabrzenski/cases/ENSO_walker}"
+SCRATCHROOT="${SCRATCHROOT:-/glade/derecho/scratch/jabrzenski}"
 NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
 
 # 10# forces base-10: an already-zero-padded BRANCH_NUMBER like "009" would
