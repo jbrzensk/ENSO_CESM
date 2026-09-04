@@ -37,6 +37,15 @@ python3 -m venv .venv
 .venv/bin/pytest
 ```
 
+OR 
+
+```bash
+ml conda
+conda activate ENSO_Control
+pytest
+```
+
+
 The test suite runs in seconds: the branch/warming decision logic and the
 orchestrator's per-cycle behavior are tested with real CESM/PBS calls
 mocked out, and `create_branch_case.sh` has a `DRY_RUN=1` mode so its shell
