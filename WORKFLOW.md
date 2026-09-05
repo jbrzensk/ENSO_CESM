@@ -135,7 +135,7 @@ recover from each.
 | `build_climatology.py` | Builds (and caches) the rolling 30-year June Niño3.4 climatology baseline used by `check_warming.py`. |
 | `create_branch_case.sh` | Parameterized (via environment variables) CESM branch-case creator, called programmatically by the orchestrator for every `MCB_ON` branch. Supports `DRY_RUN=1` to print the commands it would run instead of executing them. |
 | `create_ENSO_controller_case.sh` | The original, hand-edited, one-off script this pipeline grew out of. Still used manually to create the very *first* case in a lineage, before the orchestrator's `--bootstrap` mode adopts it. |
-| `orchestrator_wrapper.sh` | The actual PBS script `qsub` submits: sets `#PBS` resource directives, `cd`s to the repo checkout, resolves the venv's Python, and runs `enso_mcb_orchestrator.py`. |
+| `orchestrator_wrapper.sh` | The actual PBS script `qsub` submits: sets `#PBS` resource directives, `cd`s to the repo checkout, activates the `ENSO_Control` conda environment, and runs `enso_mcb_orchestrator.py`. |
 
 ## State file
 

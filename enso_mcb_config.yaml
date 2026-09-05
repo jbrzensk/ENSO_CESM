@@ -39,13 +39,11 @@ warming_threshold_c: 1.0
 end_year: 2100
 
 # The orchestrator's own subprocess calls (check_warming.py,
-# build_climatology.py) need the venv's xarray/netCDF4/PyYAML, not the bare
-# system interpreter. This path is relative to the orchestrator's cwd,
-# which orchestrator_wrapper.sh sets to $PBS_O_WORKDIR (the repo checkout)
-# before running anything. Verify that conda has been activated, and the 
-# environment is correctly set up. The environment on derecho is
-# "ENSO_Control". The conda module needs to be loaded before running the 
-# orchestrator.
+# build_climatology.py) need the "ENSO_Control" conda environment's
+# xarray/netCDF4/PyYAML, not the bare system interpreter.
+# orchestrator_wrapper.sh loads the conda module and activates
+# ENSO_Control before invoking the orchestrator, so "python3" here
+# resolves to that environment's interpreter via PATH.
 python_exe: "python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"

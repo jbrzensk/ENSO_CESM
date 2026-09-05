@@ -119,13 +119,19 @@ full design.
    `orchestrator_wrapper.sh`, so no script edit is needed. The same
    applies to `project`, passed as `qsub -A`.
 
-5. Confirm the venv exists in the repo checkout on Derecho. The
-   orchestrator needs `xarray`/`netCDF4`/`PyYAML`, and
-   `orchestrator_wrapper.sh` runs `$PBS_O_WORKDIR/.venv/bin/python3`:
+5. Confirm the `ENSO_Control` conda environment exists on Derecho and has
+   `xarray`/`netCDF4`/`PyYAML` installed — `orchestrator_wrapper.sh` runs
+   `module load conda && conda activate ENSO_Control` before invoking the
+   orchestrator:
    ```bash
-   cd /glade/u/home/jabrzenski/github/ENSO_CESM
-   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+   module load conda
+   conda activate ENSO_Control
+   python3 -c "import xarray, netCDF4, yaml"
    ```
+
+   If the environment doesn't exist yet, create it (e.g. `conda create -n
+   ENSO_Control -c conda-forge python xarray netcdf4 pyyaml`) before the
+   first bootstrap.
 
 6. **Time one real `case.build` and size the orchestrator's PBS job to
    match.** On the cycle where warming is detected, the orchestrator job
@@ -183,7 +189,8 @@ full design.
 
 ```bash
 cd /glade/u/home/jabrzenski/github/ENSO_CESM   # wherever this repo is checked out on Derecho
-.venv/bin/python3 enso_mcb_orchestrator.py \
+module load conda && conda activate ENSO_Control
+python3 enso_mcb_orchestrator.py \
     --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1051.json \
     --config-file enso_mcb_config.yaml \
     --bootstrap \
@@ -250,7 +257,8 @@ failed, `case.submit`/`qsub` rejecting the job, a `case.build` failure.
 4. Resume by running the orchestrator directly:
    ```bash
    cd /glade/u/home/jabrzenski/github/ENSO_CESM
-   .venv/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
+   module load conda && conda activate ENSO_Control
+   python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
    ```
 
 ### Signature B — a CESM run or archive job failed

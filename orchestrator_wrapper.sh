@@ -30,15 +30,11 @@ cd "$PBS_O_WORKDIR"
 
 : "${STATE_FILE:?STATE_FILE must be set (pass via qsub -v STATE_FILE=...)}"
 
-# The pipeline needs xarray/netCDF4/PyYAML, which live in the repo's venv and
-# are not available to a bare system python3. The venv is resolved relative to
-# PBS_O_WORKDIR (the repo checkout we just cd'd into), not to $0 — PBS runs a
-# spooled copy of this script, so $0's directory is not the repo.
-VENV_PYTHON="$PWD/.venv/bin/python3"
-if [ ! -x "$VENV_PYTHON" ]; then
-  echo "ERROR: no virtualenv interpreter at $VENV_PYTHON" >&2
-  echo "       Create it with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
-  exit 1
-fi
+# The pipeline needs xarray/netCDF4/PyYAML, which live in the "ENSO_Control"
+# conda environment, not the bare system python3. Load the conda module and
+# activate it before invoking the orchestrator; `python3` on PATH then
+# resolves to this environment's interpreter.
+module load conda
+conda activate ENSO_Control
 
-"$VENV_PYTHON" enso_mcb_orchestrator.py --state-file "$STATE_FILE" --config-file enso_mcb_config.yaml
+python3 enso_mcb_orchestrator.py --state-file "$STATE_FILE" --config-file enso_mcb_config.yaml
