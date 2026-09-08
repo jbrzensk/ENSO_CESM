@@ -44,7 +44,7 @@ compset='BSSP370smbb'
 project='UCSD0083'
 
 srcdir='/glade/work/jabrzenski/cases/ENSO_walker/MCB_mods'
-tagdir='/glade/u/home/jabrzenski/CESM/CESM2.1.5'
+tagdir='/glade/u/home/jabrzenski/CESM/cesm2.1.5+MCBnl'
 
 caseroot='/glade/work/jabrzenski/cases/ENSO_walker'
 
