@@ -26,9 +26,7 @@ stopn=2
 # decadal snapshots, then quarterly again from 2080). Confirmed available
 # dates on 2026-09-08:
 #   ls /glade/campaign/cgd/cesm/CESM2-LE/restarts/b.e21.BSSP370smbb.f09_g17.LE2-1091.005/rest/
-# Pick one based on scan_warming_years.py's output (see docs/RUNBOOK.md) —
-# this default is only the earliest available date, not a considered choice.
-startdate='2015-04-01'
+startdate='2030-01-01'
 
 # Follows the hybrid/branch choice above: a new ensemble member's restart
 # comes from the public CESM2-LE archive, but a new branch continues this
