@@ -107,6 +107,18 @@ full design.
    "archive" as part of a path (e.g. the `DOUT_S_ROOT` line), because a job
    ID cannot be parsed reliably out of a case-name path.
 
+   **Job-ID parsing confirmed on 2026-09-08** against a real `case.submit`
+   on the `LE2-1091.005` hybrid case: output included both
+   `Submitted job id is 7353996.desched1` (case.run) and
+   `Submitted job case.st_archive with id 7353997.desched1`.
+   `parse_last_job_id` correctly returned `7353997` (the archive job), even
+   with an earlier line containing `depend=afterok:7353996.desched1` — the
+   trailing-anchor in `JOB_ID_RE` correctly ignores mid-line digit
+   sequences. No code change needed. POP history file naming (the other
+   half of this item) still needs confirming once a real segment finishes
+   archiving — check `ls .../ocn/hist/` against `history_file_path`'s
+   expected `<case_name>.pop.h.<YYYY>-<MM>.nc`.
+
 4. Confirm the PBS queue for the orchestrator job itself
    (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
    The orchestrator job is short (about a minute, except on branch cycles
@@ -136,35 +148,38 @@ full design.
 6. **Time one real `case.build` and size the orchestrator's PBS job to
    match.** On the cycle where warming is detected, the orchestrator job
    runs `create_branch_case.sh` synchronously, and that script's
-   `./case.build` step runs *inside the orchestrator's own PBS job*. The
-   `#PBS -l select=1:ncpus=8` and `#PBS -l walltime=02:00:00` lines at the
-   top of `orchestrator_wrapper.sh` (lines 4-5) are **a guess** — no real
-   build has been timed on Derecho. If the build overruns the walltime,
-   PBS kills the orchestrator mid-build and the chain stops (this looks
-   like Signature B below, with a partially-created case to clean up).
+   `./case.build` step runs *inside the orchestrator's own PBS job*. If the
+   build overruns the walltime, PBS kills the orchestrator mid-build and
+   the chain stops (this looks like Signature B below, with a
+   partially-created case to clean up).
 
-   Do one timed trial invocation before the first production bootstrap
-   (this builds a real case — pick a throwaway branch number). `STARTDATE`
-   must be a date for which `<refcase>` already has an archived restart set
-   — i.e. `$SCRATCHROOT/archive/<refcase>/rest/<STARTDATE>-00000/` must
-   exist — otherwise the restart-copy step fails before `case.build` ever
-   runs and you get no timing data:
+   **Confirmed on 2026-09-08**, from the initial `LE2-1091.005` hybrid
+   case's real `./case.build` (same compset/resolution `create_branch_case.sh`
+   builds for every MCB branch, so representative): **500s wallclock**,
+   `GMAKE_J=16` (`./xmlquery GMAKE_J` in the built case — this is CIME's
+   actual build parallelism, independent of whatever `ncpus` a PBS job
+   happens to request; requesting fewer than `GMAKE_J` undersubscribes the
+   build, requesting more doesn't speed it up). `orchestrator_wrapper.sh`
+   is now set to `ncpus=16` (matching `GMAKE_J`) and `walltime=00:20:00`
+   (~2.4x the measured time).
+
+   If this deployment's compset/resolution ever changes, redo this trial:
+   pick a throwaway branch number, and `STARTDATE` must be a date for which
+   `<refcase>` already has an archived restart set — i.e.
+   `$SCRATCHROOT/archive/<refcase>/rest/<STARTDATE>-00000/` must exist —
+   otherwise the restart-copy step fails before `case.build` ever runs:
+
    ```bash
    cd /glade/u/home/jabrzenski/github/ENSO_CESM
-   time env ENS=1051 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
+   time env ENS=1091 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
        STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=3 MCB_ON=1 \
        bash create_branch_case.sh
    ```
 
-   Note the wallclock time and how many cores the build actually used
-   (Derecho builds are parallel), then edit the two `#PBS -l` lines in
-   `orchestrator_wrapper.sh` to the measured time plus generous headroom
-   (at least 1.5x) and a matching `ncpus`. Build parallelism is controlled
-   by CIME's `GMAKE_J` setting (`./xmlquery GMAKE_J` in the case directory),
-   not directly by the PBS `ncpus` request — if the build only used a
-   handful of cores while `ncpus` requests more, check `GMAKE_J` before
-   assuming more `ncpus` will speed anything up. Delete the throwaway
-   `branch.999` case directory and its run directory afterwards.
+   Then re-edit the two `#PBS -l` lines in `orchestrator_wrapper.sh` to the
+   newly measured time plus generous headroom (at least 1.5x) and a
+   matching `ncpus`, and delete the throwaway `branch.999` case/run
+   directories afterwards.
 
 7. **Know where to look if a live build or submit fails on the
    environment.** `create_branch_case.sh` is not run with the full ambient
