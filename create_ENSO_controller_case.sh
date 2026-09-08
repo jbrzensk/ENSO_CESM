@@ -30,7 +30,14 @@ stopn=2
 # this default is only the earliest available date, not a considered choice.
 startdate='2015-04-01'
 
-icsdir='/glade/campaign/cgd/cesm/CESM2-LE/restarts/'$refcase'/rest/'$startdate'-00000'
+# Follows the hybrid/branch choice above: a new ensemble member's restart
+# comes from the public CESM2-LE archive, but a new branch continues this
+# lineage's own previously-archived case, not the public archive.
+if [ "$runtype" = 'hybrid' ]; then
+  icsdir='/glade/campaign/cgd/cesm/CESM2-LE/restarts/'$refcase'/rest/'$startdate'-00000'
+else
+  icsdir='/glade/derecho/scratch/jabrzenski/archive/'$refcase'/rest/'$startdate'-00000'
+fi
 
 resoln='f09_g17'
 compset='BSSP370smbb'
@@ -66,6 +73,11 @@ echo "##### changing xml values #####"
 ./xmlchange RUN_TYPE=$runtype
 ./xmlchange GET_REFCASE=FALSE
 ./xmlchange RUN_REFCASE=$refcase
+if [ "$runtype" = 'hybrid' ]; then
+  # "cesm2_init" is the public CESM2-LE archive's standard reference-restart
+  # naming convention; a branch continuing this lineage's own case doesn't use it.
+  ./xmlchange RUN_REFDIR=cesm2_init
+fi
 ./xmlchange RUN_REFDATE=$startdate
 ./xmlchange RUN_STARTDATE=$startdate
 ./xmlchange DOUT_S_ROOT=/glade/derecho/scratch/jabrzenski/archive/$runname/
