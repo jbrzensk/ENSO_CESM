@@ -1,27 +1,36 @@
 # Script to create an SSP3-7.0 (CESM2-LE) case which will eventually have MCB used to modulate ENSO
 
-ens='1051'
+ens='1091'
 
-runname='b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.'$ens'.branch.009'
+# branch.000: the very first case in this lineage, so the orchestrator's
+# later --branch-number 0 (its default) matches this case's own suffix and
+# the first MCB branch it creates becomes branch.001.
+runname='b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.'$ens'.branch.000'
 
 ##### choose whether we're creating a whole new ensemble member, or a new branch #####
 
 # for a new ensemble member:
-#refcase='b.e21.BSSP370smbb.f09_g17.LE2-1011.001'
-#runtype='hybrid'
-#stopn=2
+refcase='b.e21.BSSP370smbb.f09_g17.LE2-1091.005'
+runtype='hybrid'
+stopn=2
 
 # for a new branch:
-refcase='b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.'$ens'.branch.008'
-runtype='branch'
-stopn=3
+#refcase='b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.'$ens'.branch.008'
+#runtype='branch'
+#stopn=3
 
 ##### #####
 
-startdate='2049-06-01'
+# Must exactly match a directory under icsdir below (real CESM2-LE archive
+# restart dumps are irregularly spaced — quarterly through 2030, then a few
+# decadal snapshots, then quarterly again from 2080). Confirmed available
+# dates on 2026-09-08:
+#   ls /glade/campaign/cgd/cesm/CESM2-LE/restarts/b.e21.BSSP370smbb.f09_g17.LE2-1091.005/rest/
+# Pick one based on scan_warming_years.py's output (see docs/RUNBOOK.md) —
+# this default is only the earliest available date, not a considered choice.
+startdate='2015-04-01'
 
-#icsdir='/glade/campaign/cgd/cesm/CESM2-LE/restarts/'$refcase'/rest/'$refdate'-00000'
-icsdir='/glade/derecho/scratch/jabrzenski/archive/'$refcase'/rest/'$startdate'-00000'
+icsdir='/glade/campaign/cgd/cesm/CESM2-LE/restarts/'$refcase'/rest/'$startdate'-00000'
 
 resoln='f09_g17'
 compset='BSSP370smbb'

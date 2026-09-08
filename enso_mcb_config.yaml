@@ -1,4 +1,4 @@
-ens: "1051"
+ens: "1091"
 resoln: "f09_g17"
 compset: "BSSP370smbb"
 project: "UCSD0083"
@@ -20,8 +20,8 @@ climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn
 # NOT derivable from `ens` alone — CESM2-LE's macro-initialization scheme
 # pairs specific ordinals with specific `ens` values, so this must be
 # confirmed with a real `ls` of climatology_sst_dir before deployment (see
-# docs/RUNBOOK.md's pre-flight checklist). Confirmed for ens "1051": "003".
-climatology_member_ordinal: "003"
+# docs/RUNBOOK.md's pre-flight checklist). Confirmed for ens "1091": "005".
+climatology_member_ordinal: "005"
 
 # Where per-year built climatology files are cached (one per variant/
 # lineage/year, named nino34_climatology_{variant}_LE2-{ens}.{ordinal}_{year}.nc).

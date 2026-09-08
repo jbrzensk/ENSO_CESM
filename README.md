@@ -51,6 +51,48 @@ orchestrator's per-cycle behavior are tested with real CESM/PBS calls
 mocked out, and `create_branch_case.sh` has a `DRY_RUN=1` mode so its shell
 logic can be exercised without creating or building a real case.
 
+
+## Check for Possible El Nino Years
+
+The scan_warming_years.py script will find possible El Nino years in the CESM2 dataset.
+
+```bash
+python3 scan_warming_years.py \
+>     --sst-dir /glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST \
+>     --member LE2-1091.005 --forcing-variant smbb \
+>     --start-year 2016 --end-year 2100 --threshold 1.0
+```
+
+and some example output:
+
+```bash
+2016: anomaly=-0.465C
+2017: anomaly=-0.864C
+2018: anomaly=+1.259C <-- WARMING
+2019: anomaly=+0.757C
+2020: anomaly=-0.955C
+2021: anomaly=+0.226C
+2022: anomaly=-0.004C
+2023: anomaly=+2.221C <-- WARMING
+2024: anomaly=+1.918C <-- WARMING
+2025: anomaly=-2.228C
+2026: anomaly=-0.986C
+2027: anomaly=+1.772C <-- WARMING
+2028: anomaly=+0.202C
+2029: anomaly=-0.848C
+2030: anomaly=+0.656C
+2031: anomaly=+0.674C
+2032: anomaly=-0.018C
+2033: anomaly=+1.603C <-- WARMING
+2034: anomaly=+0.719C
+2035: anomaly=+1.942C <-- WARMING
+2036: anomaly=-0.616C
+2037: anomaly=+0.364C
+2038: anomaly=+1.397C <-- WARMING
+2039: anomaly=+0.261C
+2040: anomaly=+1.307C <-- WARMING
+```
+
 ## Status
 
 This automation has not yet run a real production cycle on Derecho. Several
