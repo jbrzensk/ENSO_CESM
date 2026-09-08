@@ -1,4 +1,6 @@
+#!/usr/bin/env bash
 # Script to create an SSP3-7.0 (CESM2-LE) case which will eventually have MCB used to modulate ENSO
+set -euo pipefail
 
 ens='1091'
 
@@ -53,11 +55,14 @@ rundir=/glade/derecho/scratch/jabrzenski/$runname/run
 
 ##### Create case
 
-cd $tagdir/cime/scripts
-
 echo "##### creating case #####"
 
-./create_newcase --case $casedir --res $resoln --compset $compset --project $project
+if [ -d "$casedir" ]; then
+  echo "##### $casedir already exists, skipping create_newcase (delete it first to force a recreate) #####"
+else
+  cd $tagdir/cime/scripts
+  ./create_newcase --case $casedir --res $resoln --compset $compset --project $project
+fi
 
 echo "##### create_newcase complete #####"
 
@@ -91,11 +96,14 @@ echo "##### xmlchange complete #####"
 
 ##### Copy initial conditions
 
-mkdir -p $rundir
-
 echo "##### copying initial conditions #####"
 
-cp $icsdir/* $rundir/.
+if [ -d "$rundir" ] && [ -n "$(ls -A "$rundir" 2>/dev/null)" ]; then
+  echo "##### $rundir already has files, skipping copy (delete it first to force a recopy) #####"
+else
+  mkdir -p $rundir
+  cp $icsdir/* $rundir/.
+fi
 
 echo "##### initial conditions copied #####"
 
