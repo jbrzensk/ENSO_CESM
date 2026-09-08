@@ -1,14 +1,42 @@
 #!/usr/bin/env python3
-"""Scans a CESM2-LE ensemble member's real SST archive year-by-year and
-reports where this pipeline's June Nino3.4 warming check would fire,
-using the exact same climatology/anomaly logic as build_climatology.py
-and check_warming.py.
+"""Scan a CESM2-LE member's SST archive for June Nino3.4 warming years.
 
-This is a pre-flight/planning tool, not part of the automated pipeline: it
-lets you preview a free-running member's internal ENSO cycle before
-committing to a --start-year (or an initial hybrid-case restart date),
-without running any CESM case. Every candidate year's climatology and
-"actual June" extraction go through the production code paths unmodified.
+This pre-flight tool uses the same climatology and anomaly logic as
+``build_climatology.py`` and ``check_warming.py`` to preview a member's
+internal ENSO cycle before selecting a ``--start-year`` or hybrid-case
+restart date.
+
+Inputs
+------
+sst_dir : str
+    Directory containing the CESM2-LE SST archive.
+member : str
+    CESM2-LE ensemble member identifier.
+variant : str
+    Forcing variant, such as ``"smbb"``.
+start_year, end_year : int
+    Inclusive range of years to scan.
+threshold : float
+    Nino3.4 anomaly threshold in degrees Celsius.
+cache_dir : str
+    Directory used to cache climatology files.
+
+Outputs
+-------
+list of dict
+    Results containing each year and its anomaly, warming flag, or error.
+
+Author
+------
+Jared Brzenski, Sept 2026
+
+Example
+-------
+Command line usage::
+
+    python scan_warming_years.py --sst-dir /path/to/sst \\
+        --member LE2-1091.005 --start-year 1950 --end-year 2000
+        --threshold 1.5
 """
 import argparse
 import json
@@ -17,6 +45,7 @@ import tempfile
 
 import xarray as xr
 
+# Use existing build_climatology scripts
 from build_climatology import build_climatology, find_sst_files, nominal_year_month
 from check_warming import compute_anomaly, compute_nino34_sst, is_warming
 
