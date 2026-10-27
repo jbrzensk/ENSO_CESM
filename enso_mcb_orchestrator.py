@@ -31,10 +31,14 @@ def run_cycle(state_file: str, config_file: str) -> None:
     warming_result = None
     if state.stage == Stage.RUNNING:
         # Each lineage's climatology is built from the CESM2-LE ensemble
-        # member matching its own `ens` (LE2-{ens}.001), keeping every
-        # lineage's warming baseline consistent with its own background
-        # trajectory.
-        member = f"LE2-{config['ens']}.001"
+        # member matching its own `ens`, keeping every lineage's warming
+        # baseline consistent with its own background trajectory. The
+        # ordinal suffix (LE2-{ens}.{ordinal}) is not derivable from `ens`
+        # alone — CESM2-LE's macro-initialization scheme pairs specific
+        # ordinals with specific `ens` values, confirmed per-lineage by a
+        # real archive listing (see docs/RUNBOOK.md's pre-flight checklist)
+        # rather than assumed.
+        member = f"LE2-{config['ens']}.{config['climatology_member_ordinal']}"
         climatology_file = jobs.build_climatology(
             config["python_exe"], config["build_climatology_script"],
             config["climatology_sst_dir"], member,
@@ -60,7 +64,7 @@ def run_cycle(state_file: str, config_file: str) -> None:
         casedir = jobs.create_branch_case(
             config["create_branch_case_script"], config["ens"], transition.ref_case,
             transition.next_branch_number, transition.start_date, transition.stop_n,
-            transition.mcb_on, config["caseroot"], config["notification_email"],
+            transition.mcb_on, config["caseroot"],
             config["resoln"], config["compset"], config["project"],
             config["srcdir"], config["tagdir"], config["scratchroot"],
         )
@@ -82,7 +86,7 @@ def run_cycle(state_file: str, config_file: str) -> None:
     save_state(state_file, state)
 
     jobs.submit_orchestrator_self(
-        config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["orchestrator_wrapper_script"], job_id, state_file,
         config["project"], config["orchestrator_queue"],
     )
 
@@ -101,10 +105,9 @@ def bootstrap(state_file: str, config_file: str, lineage_name: str,
     # settings (notably RESUBMIT>0) that conflict with orchestrated running,
     # so force the pipeline's requirements before the first submission.
     jobs.configure_case_for_orchestration(casedir)
-    jobs.set_batch_mail(casedir, config["notification_email"])
     job_id = jobs.resubmit_case(casedir, 12)
     jobs.submit_orchestrator_self(
-        config["orchestrator_wrapper_script"], job_id, state_file, config["notification_email"],
+        config["orchestrator_wrapper_script"], job_id, state_file,
         config["project"], config["orchestrator_queue"],
     )
 

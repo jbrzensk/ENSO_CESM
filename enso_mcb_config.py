@@ -3,8 +3,9 @@ import yaml
 REQUIRED_KEYS = [
     "ens", "resoln", "compset", "project", "srcdir", "tagdir",
     "caseroot", "scratchroot", "climatology_sst_dir", "climatology_cache_dir",
-    "climatology_forcing_variant", "build_climatology_script", "warming_threshold_c",
-    "end_year", "notification_email", "python_exe", "check_warming_script",
+    "climatology_forcing_variant", "climatology_member_ordinal",
+    "build_climatology_script", "warming_threshold_c",
+    "end_year", "python_exe", "check_warming_script",
     "create_branch_case_script", "orchestrator_wrapper_script",
     "orchestrator_queue",
 ]

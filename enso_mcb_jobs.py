@@ -139,14 +139,6 @@ def flip_mcb_off(case_dir: str) -> None:
     _run_checked(["./preview_namelists"], cwd=case_dir)
 
 
-def set_batch_mail(case_dir: str, email: str) -> None:
-    # NOTE: BATCH_MAIL_TO/BATCH_MAIL_TYPE are the assumed CIME xmlchange IDs;
-    # see the pre-flight checklist in docs/RUNBOOK.md for how to verify them
-    # against a real case (they may be MAIL_USER/MAIL_TYPE on this CIME version).
-    _run_checked(["./xmlchange", f"BATCH_MAIL_TO={email}"], cwd=case_dir)
-    _run_checked(["./xmlchange", "BATCH_MAIL_TYPE=begin,end,fail"], cwd=case_dir)
-
-
 def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: str,
                        variant: str, year: int, cache_dir: str) -> str:
     """Build (or reuse) this year's rolling climatology file for `member`.
@@ -193,7 +185,7 @@ def run_check_warming(python_exe: str, script_path: str, history_file: str,
 
 def create_branch_case(script_path: str, ens: str, refcase: str, branch_number: int,
                         startdate: str, stop_n: int, mcb_on: bool, caseroot: str,
-                        email: str, resoln: str, compset: str, project: str,
+                        resoln: str, compset: str, project: str,
                         srcdir: str, tagdir: str, scratchroot: str) -> str:
     env = {
         name: os.environ[name]
@@ -214,7 +206,6 @@ def create_branch_case(script_path: str, ens: str, refcase: str, branch_number: 
         "TAGDIR": tagdir,
         "CASEROOT": caseroot,
         "SCRATCHROOT": scratchroot,
-        "NOTIFICATION_EMAIL": email,
     })
     result = _run_checked(["bash", script_path], env=env)
     match = CASEDIR_RE.search(result.stdout)
@@ -224,8 +215,8 @@ def create_branch_case(script_path: str, ens: str, refcase: str, branch_number: 
 
 
 def submit_orchestrator_self(wrapper_script: str, depend_job_id: str, state_file: str,
-                              email: str, project: str = None, queue: str = None) -> str:
-    cmd = ["qsub", "-W", f"depend=afterok:{depend_job_id}", "-m", "ae", "-M", email]
+                              project: str = None, queue: str = None) -> str:
+    cmd = ["qsub", "-W", f"depend=afterok:{depend_job_id}"]
     # -A/-q override the static #PBS lines in orchestrator_wrapper.sh so the
     # account and queue stay tunable from enso_mcb_config.yaml.
     if project:

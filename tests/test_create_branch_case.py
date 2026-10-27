@@ -21,7 +21,7 @@ def run_script(tmp_path):
     """Runs create_branch_case.sh in DRY_RUN mode, isolated under tmp_path.
 
     CASEROOT/SCRATCHROOT default to a tmp_path sandbox rather than the
-    script's real hardcoded defaults (/glade/work/walkerl/...). Without
+    script's real hardcoded defaults (/glade/work/jabrzenski/...). Without
     this, a test's computed case name can collide with a real, already
     -existing case directory on the actual deployment host (Derecho) -
     the script's non-resumable existence guard then exits before printing
@@ -133,22 +133,6 @@ def test_fails_before_mutating_anything_when_case_dir_exists(run_script, tmp_pat
     assert "already exists" in result.stderr
     assert str(existing) in result.stderr
     assert "create_newcase" not in result.stdout
-
-
-def test_dry_run_sets_batch_mail_when_notification_email_provided(run_script):
-    env = dict(BASE_ENV, NOTIFICATION_EMAIL="walkerl@example.edu")
-
-    result = run_script(env)
-
-    assert "BATCH_MAIL_TO=walkerl@example.edu" in result.stdout
-    assert "BATCH_MAIL_TYPE=begin,end,fail" in result.stdout
-
-
-def test_dry_run_skips_batch_mail_when_notification_email_unset(run_script):
-    result = run_script(BASE_ENV)
-
-    assert "BATCH_MAIL_TO" not in result.stdout
-    assert "BATCH_MAIL_TYPE" not in result.stdout
 
 
 def test_dry_run_appends_mcb_line_when_mcb_on(run_script):
