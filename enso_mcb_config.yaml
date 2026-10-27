@@ -40,11 +40,12 @@ end_year: 2100
 
 # The orchestrator's own subprocess calls (check_warming.py,
 # build_climatology.py) need the "ENSO_Control" conda environment's
-# xarray/netCDF4/PyYAML, not the bare system interpreter.
-# orchestrator_wrapper.sh loads the conda module and activates
-# ENSO_Control before invoking the orchestrator, so "python3" here
-# resolves to that environment's interpreter via PATH.
-python_exe: "python3"
+# xarray/netCDF4/PyYAML, not the bare system interpreter. This is an
+# absolute path because the environment is deliberately never activated:
+# activation would put its Python 3.12 first on PATH, where CIME's scripts
+# would pick it up and fail (`No module named 'imp'`). Keep in sync with
+# ENSO_PYTHON in orchestrator_wrapper.sh.
+python_exe: "/glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3"
 check_warming_script: "check_warming.py"
 create_branch_case_script: "create_branch_case.sh"
 build_climatology_script: "build_climatology.py"

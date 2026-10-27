@@ -140,13 +140,21 @@ full design.
    applies to `project`, passed as `qsub -A`.
 
 5. Confirm the `ENSO_Control` conda environment exists on Derecho and has
-   `xarray`/`netCDF4`/`PyYAML` installed — `orchestrator_wrapper.sh` runs
-   `module load conda && conda activate ENSO_Control` before invoking the
-   orchestrator:
+   `xarray`/`netCDF4`/`PyYAML` installed. `orchestrator_wrapper.sh` and
+   `python_exe` in `enso_mcb_config.yaml` both run this environment's
+   interpreter **by absolute path, without activating it**:
    ```bash
-   module load conda
-   conda activate ENSO_Control
-   python3 -c "import xarray, netCDF4, yaml"
+   /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 -c "import xarray, netCDF4, yaml"
+   ```
+
+   Never `conda activate ENSO_Control` in the shell you bootstrap or resume
+   from. Activation puts the environment's Python 3.12 first on `PATH`,
+   every CIME script the orchestrator spawns picks it up, and CESM 2.1.5's
+   CIME fails under 3.12 with `ModuleNotFoundError: No module named 'imp'`.
+   Also confirm the shell's default Python (what CIME will use) can run CIME:
+   ```bash
+   which python python3            # must NOT point into conda-envs/ENSO_Control
+   python3 -c "import imp"         # must succeed (only a DeprecationWarning)
    ```
 
    If the environment doesn't exist yet, create it (e.g. `conda create -n
@@ -212,8 +220,8 @@ full design.
 
 ```bash
 cd /glade/u/home/jabrzenski/github/ENSO_CESM   # wherever this repo is checked out on Derecho
-module load conda && conda activate ENSO_Control
-python3 enso_mcb_orchestrator.py \
+# No `conda activate` — see pre-flight item 5.
+/glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py \
     --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1051.json \
     --config-file enso_mcb_config.yaml \
     --bootstrap \
@@ -280,8 +288,8 @@ failed, `case.submit`/`qsub` rejecting the job, a `case.build` failure.
 4. Resume by running the orchestrator directly:
    ```bash
    cd /glade/u/home/jabrzenski/github/ENSO_CESM
-   module load conda && conda activate ENSO_Control
-   python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
+   # No `conda activate` — see pre-flight item 5.
+   /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
    ```
 
 ### Signature B — a CESM run or archive job failed
