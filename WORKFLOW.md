@@ -115,12 +115,14 @@ the run job: `check_warming.py` reads from the archived output directory,
 so the next orchestrator invocation must not start until archiving has
 actually finished.
 
-Any exception raised during steps B–O (a failed `xmlchange`, a
-`case.submit`/`qsub` rejection, a missing climatology file, a failed
+Any exception raised during steps B–P (a failed `xmlchange`, a
+`case.submit`/`qsub` rejection, missing SST or history data, a failed
 `case.build`) is caught, written to the state file as stage `FAILED` with
-a reason, and the chain is *not* continued — no job P is submitted. See
-the Runbook for the two distinct ways a lineage can stop and how to
-recover from each.
+a reason, and the chain is *not* continued. Note the order: by step P the
+CESM segment is already queued and the state file already advanced, so a
+failure at P leaves that segment running with no orchestrator job queued
+after it. See the Runbook for the distinct ways a lineage can stop and how
+to recover from each.
 
 ## Components
 

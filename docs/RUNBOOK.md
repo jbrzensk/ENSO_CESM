@@ -218,35 +218,108 @@ full design.
 
 ## Bootstrapping a new lineage
 
+Bootstrapping hands an existing case over to the orchestrator. Before you
+run it:
+
+1. **The case must already be built and have finished one run.** Create it
+   with `create_ENSO_controller_case.sh`, then in the case directory run
+   `./case.build` and `./case.submit`. Bootstrap does neither. It sets
+   `CONTINUE_RUN=TRUE`, which continues from the case's own last restart,
+   and a case that has never run has none.
+2. **Nothing for the case may be queued or running.**
+   `create_ENSO_controller_case.sh` sets `RESUBMIT=3`, so CIME queues
+   follow-on segments by itself; wait until `qstat -u $USER` shows none of
+   them. Bootstrapping while one is in flight puts two jobs on one run
+   directory.
+3. **Find where the case stopped**, to choose `--start-year` (below). The
+   last date listed is where bootstrap's segment will start:
+
+   ```bash
+   ls /glade/derecho/scratch/jabrzenski/archive/<initial-refcase>/rest/
+   ```
+
+Bootstrap refuses to run if the state file already exists, since a second
+bootstrap would start a second segment and a second orchestrator chain on
+the same case. The only time to delete a state file and bootstrap again is
+after a failed bootstrap (see [If bootstrap fails](#if-bootstrap-fails)).
+The `state/` directory is created automatically.
+
 ```bash
-cd /glade/u/home/jabrzenski/github/ENSO_CESM   # wherever this repo is checked out on Derecho
+cd /glade/u/home/jabrzenski/github/ENSO_CESM   # the repo checkout: queued jobs run relative paths from here
 # No `conda activate` — see pre-flight item 5.
 /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py \
-    --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1051.json \
+    --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1091.json \
     --config-file enso_mcb_config.yaml \
     --bootstrap \
-    --lineage-name enso_mcb_1051 \
-    --initial-refcase <your-existing-case-name> \
-    --start-year <year-of-the-first-check> \
-    --branch-number <branch number of that existing case>
+    --lineage-name enso_mcb_1091 \
+    --initial-refcase b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1091.branch.000 \
+    --start-year <see below> \
+    --branch-number 0
 ```
 
-`--branch-number` must be the branch number of `--initial-refcase` (e.g.
-`9` for `...branch.009`); the first MCB branch case this lineage creates
-will be that number + 1. It defaults to `0`, which would collide with the
-existing `branch.008`/`branch.009` cases of this lineage — pass it
-explicitly.
+These values are for the current deployment (`ens: "1091"` in
+`enso_mcb_config.yaml`); for another lineage, change the `1091`s.
 
-Bootstrapping forces the XML settings the pipeline requires onto the
-adopted case (`RESUBMIT=0`, `STOP_OPTION=nmonths`, `DOUT_S=TRUE`,
-`REST_OPTION=nmonths`, `REST_N=1`), resubmits the case for a 12-month
-segment, and chains the first orchestrator job dependent on its archive
-job. From here, the chain runs itself.
+- `--initial-refcase` is the full name of the case being adopted: the
+  directory under `caseroot` that `create_ENSO_controller_case.sh` created
+  (its `runname`). It is **not** the CESM2-LE member that case was started
+  from (`b.e21.BSSP370smbb.f09_g17.LE2-1091.005`), which is only a source
+  of restart files, not a case directory bootstrap can change.
+- `--branch-number` is the branch number of `--initial-refcase`: `0` for
+  `...branch.000`, `9` for `...branch.009`. The first MCB branch this
+  lineage creates is that number + 1. It defaults to `0`, which is right
+  for a case made by `create_ENSO_controller_case.sh` as currently
+  configured. When adopting a case with any other suffix, pass it
+  explicitly, or the first MCB branch would be `branch.001` and could
+  collide with an existing case.
+- `--start-year` is the year of the first June inside the 12-month segment
+  bootstrap submits, which starts where the case stopped (step 3). For
+  example, `create_ENSO_controller_case.sh` as configured starts on
+  2030-01-01 and runs four 2-month segments (`STOP_N=2`, `RESUBMIT=3`),
+  stopping at 2030-09-01. Bootstrap's segment then runs to 2031-09-01, so
+  use `--start-year 2031`. A year too early (2030 here) makes the first
+  check read the June file left over from the initial run, and every later
+  check a year behind the simulation.
+
+Bootstrap writes the state file first, then forces the XML settings the
+pipeline requires onto the adopted case (`RESUBMIT=0`,
+`STOP_OPTION=nmonths`, `DOUT_S=TRUE`, `REST_OPTION=nmonths`, `REST_N=1`),
+sets `STOP_N=12` and `CONTINUE_RUN=TRUE`, runs `case.submit`, and queues
+the first orchestrator job dependent on that segment's archive job. It
+returns in a minute or two; from here, the chain runs itself as PBS jobs.
 
 `RESUBMIT=0` matters: the manual `create_ENSO_controller_case.sh` sets
 `RESUBMIT=3`, and if that were left in place CIME's own auto-resubmit
 would advance the case concurrently with the orchestrator's explicit
 resubmissions — two chains driving one case.
+
+To confirm it worked: the state file shows `"stage": "RUNNING"` with your
+start year and no `failure_reason`, and `qstat -u $USER` shows the run
+job, the `st_archive` job, and a held (`H`) `enso_mcb_orchestrator` job.
+
+### If bootstrap fails
+
+A failed bootstrap prints its traceback in your terminal and leaves the
+state file at `"stage": "FAILED"` with `"failed_from_stage": "RUNNING"`.
+**Don't follow Signature A below.** Setting the stage back to `RUNNING`
+and running the orchestrator would start a normal cycle, which runs the
+warming check for a year whose history file doesn't exist yet. What to do
+depends on how far bootstrap got, which `failure_reason` shows:
+
+- **`./xmlchange` failed:** nothing was submitted. Fix the cause, delete
+  the state file, and run the same `--bootstrap` command again (bootstrap
+  refuses to run while the state file exists).
+- **`./case.submit` failed:** check `qstat -u $USER` and `qdel` anything it
+  did queue for the case. Then fix the cause, delete the state file, and
+  run `--bootstrap` again.
+- **`qsub` failed** (the reason names `orchestrator_wrapper.sh`): the
+  12-month segment **is already queued**. Keep the state file and don't
+  run `--bootstrap` again, which would submit the segment a second time.
+  Fix the `qsub` problem, edit the
+  state file to `"stage": "RUNNING"` with `"failed_from_stage"` and
+  `"failure_reason"` set to `null`, and
+  [queue the orchestrator by hand](#queuing-the-orchestrator-by-hand)
+  against the segment's `st_archive` job.
 
 ## Monitoring
 
@@ -272,25 +345,42 @@ Symptoms: the state file says `"stage": "FAILED"`, plus
 `"failed_from_stage"` (the stage it was in when it failed) and
 `"failure_reason"` (the exception). The orchestrator caught the
 exception, recorded it, and exited non-zero without chaining a next job.
-Typical causes: missing climatology/history file, an `xmlchange` that
-failed, `case.submit`/`qsub` rejecting the job, a `case.build` failure.
+Typical causes: missing SST or history data, an `xmlchange` that failed,
+`case.submit`/`qsub` rejecting the job, a `case.build` failure.
+
+If the failure came from a `--bootstrap` run (the traceback was in your
+terminal), use [If bootstrap fails](#if-bootstrap-fails) instead. These
+steps are for a lineage that was already running.
 
 1. Read `"failure_reason"` in the state file, and the failing
    orchestrator job's log (`enso_mcb_orchestrator.o<jobid>`) for the full
    traceback. Failures of subprocesses (CIME, qsub, the branch-case
    script) include the command's captured stdout/stderr in the message.
 2. Fix the underlying issue (missing file, bad path, CIME error, etc.).
-3. Set `"stage"` back to the value in `"failed_from_stage"` — that is
-   the stage to resume from — and clear `"failed_from_stage"` and
-   `"failure_reason"`. Double-check `"case_name"`/`"year"` against what
-   actually happened on disk: the orchestrator only advances them after
-   the corresponding submission succeeded.
-4. Resume by running the orchestrator directly:
-   ```bash
-   cd /glade/u/home/jabrzenski/github/ENSO_CESM
-   # No `conda activate` — see pre-flight item 5.
-   /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
-   ```
+3. **Check `qstat -u $USER` before resuming.** The orchestrator submits
+   the CESM segment and saves the advanced state *before* its last step,
+   queuing the next orchestrator job. So if `failure_reason` starts with
+   `RuntimeError: Command qsub`, that segment is already queued or
+   running, and the state file (including `"failed_from_stage"`) already
+   describes it. Running the orchestrator now would act on a segment that
+   hasn't finished.
+4. Set `"stage"` back to the value in `"failed_from_stage"` — that is
+   the stage to resume from — and set `"failed_from_stage"` and
+   `"failure_reason"` to `null`. Double-check `"case_name"`/`"year"`
+   against what actually happened on disk: the orchestrator only advances
+   them after the corresponding submission succeeded.
+5. Resume:
+   - If a CESM segment for this lineage is still queued or running (the
+     `qsub` case in step 3),
+     [queue the orchestrator by hand](#queuing-the-orchestrator-by-hand)
+     against its `st_archive` job.
+   - Otherwise, run the orchestrator directly:
+
+     ```bash
+     cd /glade/u/home/jabrzenski/github/ENSO_CESM
+     # No `conda activate` — see pre-flight item 5.
+     /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py --state-file <path> --config-file enso_mcb_config.yaml
+     ```
 
 ### Signature B — a CESM run or archive job failed
 
@@ -320,9 +410,30 @@ unsatisfied dependency.)
 3. The state file's stage is still correct for *what was submitted* —
    the failed segment is the one belonging to the recorded stage — so
    after fixing the case, resubmit that segment by hand
-   (`cd $CASEDIR && ./case.submit`) and chain the orchestrator to its
-   archive job, or simply re-run the orchestrator directly as in
-   Signature A step 4 once the segment has completed.
+   (`cd $CASEDIR && ./case.submit`) and
+   [queue the orchestrator by hand](#queuing-the-orchestrator-by-hand)
+   against its archive job, or simply re-run the orchestrator directly as
+   in Signature A step 5 once the segment has completed.
+
+### Queuing the orchestrator by hand
+
+When a CESM segment is queued or running but no orchestrator job is
+waiting for it, queue one the same way the orchestrator does. Submit from
+the repo checkout: the job runs relative paths from the directory it was
+submitted from.
+
+```bash
+cd /glade/u/home/jabrzenski/github/ENSO_CESM
+qstat -u $USER                     # note the st_archive job's ID
+qsub -W depend=afterok:<st_archive-job-id> -A UCSD0083 -q main \
+     -v STATE_FILE=/glade/u/home/jabrzenski/github/ENSO_CESM/state/<lineage>.json \
+     orchestrator_wrapper.sh
+```
+
+`-A` and `-q` are `project` and `orchestrator_queue` from
+`enso_mcb_config.yaml`. If the segment has already finished, there is
+nothing to wait for: run the orchestrator directly as in Signature A
+step 5 instead.
 
 ### A partially-created branch case
 
@@ -336,12 +447,18 @@ retrying.
 
 ## Stopping a lineage early
 
-Cancel the currently queued/running job for that lineage
-(`qdel <jobid>`) — since each stage only chains the *next* job after
-finishing, cancelling one job stops the chain without needing to touch
-the state file. Resume later by resubmitting the orchestrator manually
-as in Signature A step 4 above.
+The clean way to stop is to cancel only the held `enso_mcb_orchestrator`
+job (`qstat -u $USER`, then `qdel <jobid>`) and let the CESM segment that
+is already running, and its `st_archive` job, finish. The state file then
+matches a completed segment, so resuming later is just running the
+orchestrator directly as in Signature A step 5.
 
-Note that a deliberately cancelled lineage looks exactly like Signature B
+If you also cancel the CESM run or `st_archive` job, that segment is left
+unfinished, and it has to be completed before the orchestrator runs
+again. Running the orchestrator straight away would treat it as finished
+(an `MCB_ON` case, for example, would have seeding turned off partway
+through June–August). Resume as in Signature B step 3 instead.
+
+Either way, a deliberately stopped lineage looks exactly like Signature B
 (non-terminal stage, empty queue), so leave yourself a note if you intend
 to resume it later.

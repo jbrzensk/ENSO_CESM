@@ -32,6 +32,20 @@ def test_save_state_is_atomic_leaves_no_tmp_file(tmp_path):
     assert state_path.exists()
 
 
+def test_save_state_creates_missing_parent_directory(tmp_path):
+    """The repo's state/ directory is not tracked by git, so on a fresh
+    checkout the very first save (bootstrap's) must create it."""
+    state_path = tmp_path / "state" / "enso_mcb_1091.json"
+    state = CycleState(
+        lineage_name="enso_mcb_1091", case_name="c", stage=Stage.RUNNING,
+        branch_number=0, year=2031,
+    )
+
+    save_state(str(state_path), state)
+
+    assert load_state(str(state_path)) == state
+
+
 def test_load_state_tolerates_json_written_before_failure_fields_existed(tmp_path):
     """State files written by an earlier version have no failure fields."""
     state_path = tmp_path / "state.json"

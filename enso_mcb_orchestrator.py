@@ -91,8 +91,23 @@ def run_cycle(state_file: str, config_file: str) -> None:
     )
 
 
+class StateFileExistsError(Exception):
+    """Raised when bootstrapping onto a state file that already exists."""
+
+
 def bootstrap(state_file: str, config_file: str, lineage_name: str,
               initial_refcase: str, start_year: int, branch_number: int = 0) -> None:
+    # A second bootstrap would resubmit the case and start a second
+    # orchestrator chain alongside the one already driving it. A state file
+    # left by a bootstrap that failed before submitting anything must be
+    # deleted by hand first (see docs/RUNBOOK.md, "If bootstrap fails").
+    if os.path.exists(state_file):
+        raise StateFileExistsError(
+            f"state file {state_file} already exists: this lineage has already been "
+            "bootstrapped. If it is left over from a bootstrap that failed before "
+            "submitting anything, delete it and re-run (see docs/RUNBOOK.md, "
+            "'If bootstrap fails')."
+        )
     config = load_config(config_file)
     state = CycleState(
         lineage_name=lineage_name, case_name=initial_refcase,
@@ -150,6 +165,11 @@ def main() -> None:
                       args.initial_refcase, args.start_year, args.branch_number)
         else:
             run_cycle(args.state_file, args.config_file)
+    except StateFileExistsError as exc:
+        # Not a lineage failure: the existing state file may belong to a
+        # healthy running lineage, so it must not go through mark_failed.
+        log.error("%s", exc)
+        sys.exit(1)
     except Exception as exc:
         log.exception("Cycle failed for state file %s; halting chain.", args.state_file)
         mark_failed(args.state_file, exc)

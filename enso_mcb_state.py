@@ -33,6 +33,11 @@ def load_state(path: str) -> CycleState:
 
 
 def save_state(path: str, state: CycleState) -> None:
+    # The repo's state/ directory is not tracked by git, so the first save
+    # on a fresh checkout (bootstrap's) has to create it.
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     tmp_path = path + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump(dataclasses.asdict(state), f, indent=2)

@@ -260,6 +260,43 @@ def test_main_bootstrap_threads_branch_number_from_cli(monkeypatch, config_file,
     assert load_state(str(state_path)).branch_number == 9
 
 
+def test_bootstrap_refuses_when_state_file_already_exists(monkeypatch, config_file, state_file):
+    """A second bootstrap would resubmit the case and start a second
+    orchestrator chain alongside the one already driving it."""
+    calls = bootstrap_recorder(monkeypatch)
+    submitted_self = []
+    monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: submitted_self.append(True))
+    before = open(state_file).read()
+
+    with pytest.raises(orch.StateFileExistsError, match="already exists"):
+        orch.bootstrap(state_file, config_file, "enso_mcb_1051", "initial-case", 2050)
+
+    assert open(state_file).read() == before
+    assert calls == []
+    assert submitted_self == []
+
+
+def test_main_bootstrap_refusal_does_not_mark_existing_lineage_failed(monkeypatch, config_file, state_file):
+    """The refusal must not go through mark_failed: the existing state file
+    belongs to a lineage that may be running fine."""
+    bootstrap_recorder(monkeypatch)
+    monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
+    monkeypatch.setattr("sys.argv", [
+        "enso_mcb_orchestrator.py",
+        "--state-file", state_file, "--config-file", config_file,
+        "--bootstrap", "--lineage-name", "enso_mcb_1051",
+        "--initial-refcase", "initial-case", "--start-year", "2050",
+    ])
+    before = open(state_file).read()
+
+    with pytest.raises(SystemExit) as exc_info:
+        orch.main()
+
+    assert exc_info.value.code != 0
+    assert open(state_file).read() == before
+    assert load_state(state_file).stage == Stage.RUNNING
+
+
 def test_main_marks_failed_and_does_not_resubmit_on_error(monkeypatch, config_file, state_file):
     def boom(*a, **k):
         raise RuntimeError("case.submit blew up")
