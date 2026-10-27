@@ -114,10 +114,18 @@ full design.
    `parse_last_job_id` correctly returned `7353997` (the archive job), even
    with an earlier line containing `depend=afterok:7353996.desched1` — the
    trailing-anchor in `JOB_ID_RE` correctly ignores mid-line digit
-   sequences. No code change needed. POP history file naming (the other
-   half of this item) still needs confirming once a real segment finishes
-   archiving — check `ls .../ocn/hist/` against `history_file_path`'s
-   expected `<case_name>.pop.h.<YYYY>-<MM>.nc`.
+   sequences. No code change needed.
+
+   **POP history file naming confirmed on 2026-09-10** against the same
+   case's first archived segment: the archive directory landed exactly at
+   `history_file_path`'s expected
+   `$SCRATCHROOT/archive/<case_name>/ocn/hist/`, and the monthly file was
+   named `b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1091.branch.000.pop.h.2030-01.nc`
+   — an exact match for `<case_name>.pop.h.<YYYY>-<MM>.nc`. (POP also
+   writes a separate daily-mean stream, `*.pop.h.nday1.<YYYY>-<MM>-<DD>.nc`,
+   which the pipeline never references — no collision risk, since
+   `history_file_path` builds an exact filename rather than a glob.) No
+   code change needed.
 
 4. Confirm the PBS queue for the orchestrator job itself
    (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
