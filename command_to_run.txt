@@ -1,0 +1,9 @@
+# Command to run the orchestrator
+/glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 enso_mcb_orchestrator.py \
+    --state-file /glade/u/home/jabrzenski/github/ENSO_CESM/state/enso_mcb_1091r.json \
+    --config-file enso_mcb_config.yaml \
+    --bootstrap \
+    --lineage-name enso_mcb_1091r \
+    --initial-refcase b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1091.r.branch.000 \
+    --start-year 2030 \
+    --branch-number 0
