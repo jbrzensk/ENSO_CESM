@@ -36,7 +36,7 @@ climatology_cache_dir: "/glade/work/jabrzenski/cases/ENSO_walker/climatology_cac
 climatology_forcing_variant: "smbb"
 
 warming_threshold_c: 1.0
-end_year: 2100
+end_year: 2060
 
 # The orchestrator's own subprocess calls (check_warming.py,
 # build_climatology.py) need the "ENSO_Control" conda environment's

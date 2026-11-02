@@ -60,7 +60,7 @@ The scan_warming_years.py script will find possible El Nino years in the CESM2 d
 python3 scan_warming_years.py \
 >     --sst-dir /glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST \
 >     --member LE2-1091.005 --forcing-variant smbb \
->     --start-year 2016 --end-year 2100 --threshold 1.0
+>     --start-year 2016 --end-year 2060 --threshold 1.0
 ```
 
 and some example output:
