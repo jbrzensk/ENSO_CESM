@@ -127,6 +127,25 @@ full design.
    `history_file_path` builds an exact filename rather than a glob.) No
    code change needed.
 
+   **History file variables confirmed on 2026-11-04** against
+   `…1091.r.branch.000.pop.h.2030-06.nc`: the monthly file has **no
+   2-D `SST`**. Sea temperature is only in the 3-D
+   `TEMP(time, z_t, nlat, nlon)`, whose top level is the surface value.
+   `TAREA`/`TLAT`/`TLONG` are present. So `check_warming.py` reads `TEMP`
+   from the history file (`--history-sst-var`, default `TEMP`) and `SST`
+   from the climatology file (`--climatology-sst-var`, default `SST`).
+   The first lineage to reach a warming check failed with
+   `No variable named 'SST'` before this was fixed. For a new case with
+   customised POP output (`user_nl_pop` / tavg settings), list the June
+   file's variables before bootstrapping:
+
+   ```bash
+   /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 -c "
+   import sys, xarray as xr; ds = xr.open_dataset(sys.argv[1])
+   for v in ('TEMP','TAREA','TLAT','TLONG'): print(v, ds[v].dims if v in ds else 'MISSING')" \
+     /glade/derecho/scratch/jabrzenski/archive/<case>/ocn/hist/<case>.pop.h.<YYYY>-06.nc
+   ```
+
 4. Confirm the PBS queue for the orchestrator job itself
    (`orchestrator_queue` in `enso_mcb_config.yaml`, default `main`).
    The orchestrator job is short (about a minute, except on branch cycles

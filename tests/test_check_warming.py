@@ -32,6 +32,30 @@ def make_synthetic_history_file(path, sst_value_inside_box, sst_value_outside_bo
     ds.to_netcdf(path)
 
 
+def make_pop_monthly_history_file(path, sst_value_inside_box, sst_value_outside_box):
+    """Shaped like a real CESM2 POP monthly history file (pop.h.YYYY-MM.nc):
+    no 2-D SST, only 3-D TEMP on (time, z_t, nlat, nlon). Below the top
+    level the field is a different value, so only a top-level read gives
+    the expected surface temperature."""
+    lat = np.array([-10.0, -2.5, 2.5, 10.0])
+    lon = np.array([100.0, 200.0, 300.0])
+    lat2d, lon2d = np.meshgrid(lat, lon, indexing="ij")
+    inside = (lat2d >= -5.0) & (lat2d <= 5.0) & (lon2d >= 190.0) & (lon2d <= 240.0)
+    surface = np.where(inside, sst_value_inside_box, sst_value_outside_box)
+    temp = np.stack([surface, np.full_like(surface, 4.0)])[np.newaxis]
+    ds = xr.Dataset(
+        {
+            "TEMP": (("time", "z_t", "nlat", "nlon"), temp),
+            "TAREA": (("nlat", "nlon"), np.ones_like(surface)),
+        },
+        coords={
+            "TLAT": (("nlat", "nlon"), lat2d),
+            "TLONG": (("nlat", "nlon"), lon2d),
+        },
+    )
+    ds.to_netcdf(path)
+
+
 def test_compute_nino34_sst_averages_only_inside_the_box(tmp_path):
     history_file = tmp_path / "history.nc"
     make_synthetic_history_file(history_file, sst_value_inside_box=28.0, sst_value_outside_box=15.0)
@@ -55,9 +79,11 @@ def test_is_warming_false_below_threshold():
 
 
 def test_cli_prints_warming_json(tmp_path):
+    """Default flags must handle the real file pair: a POP monthly history
+    file with only 3-D TEMP, and build_climatology.py's 2-D SST output."""
     history_file = tmp_path / "history.nc"
     climatology_file = tmp_path / "clim.nc"
-    make_synthetic_history_file(history_file, sst_value_inside_box=29.0, sst_value_outside_box=15.0)
+    make_pop_monthly_history_file(history_file, sst_value_inside_box=29.0, sst_value_outside_box=15.0)
     make_synthetic_history_file(climatology_file, sst_value_inside_box=27.5, sst_value_outside_box=15.0)
 
     result = subprocess.run(
@@ -151,14 +177,15 @@ def test_cli_accepts_custom_variable_names(tmp_path):
     make_synthetic_history_file_custom_names(
         history_file, 29.0, "TEMP", "AREA", "LATITUDE", "LONGITUDE")
     make_synthetic_history_file_custom_names(
-        climatology_file, 27.5, "TEMP", "AREA", "LATITUDE", "LONGITUDE")
+        climatology_file, 27.5, "CLIM_SST", "AREA", "LATITUDE", "LONGITUDE")
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
          "--history-file", str(history_file),
          "--climatology-file", str(climatology_file),
          "--year", "2054", "--threshold", "1.0",
-         "--sst-var", "TEMP", "--area-var", "AREA",
+         "--history-sst-var", "TEMP", "--climatology-sst-var", "CLIM_SST",
+         "--area-var", "AREA",
          "--lat-var", "LATITUDE", "--lon-var", "LONGITUDE"],
         capture_output=True, text=True,
     )
@@ -208,7 +235,7 @@ def test_cli_fails_on_zero_area_mask(tmp_path):
         [sys.executable, SCRIPT,
          "--history-file", str(history_file),
          "--climatology-file", str(climatology_file),
-         "--year", "2054"],
+         "--year", "2054", "--history-sst-var", "SST"],
         capture_output=True, text=True,
     )
 
@@ -216,3 +243,12 @@ def test_cli_fails_on_zero_area_mask(tmp_path):
     payload = json.loads(result.stderr)
     assert "error" in payload
     assert "Nino3.4 region mask matched no grid cells" in payload["error"]
+
+
+def test_compute_nino34_sst_reads_top_level_of_3d_temp(tmp_path):
+    history_file = tmp_path / "history.nc"
+    make_pop_monthly_history_file(history_file, sst_value_inside_box=28.0, sst_value_outside_box=15.0)
+
+    result = compute_nino34_sst(str(history_file), sst_var="TEMP")
+
+    assert result == pytest.approx(28.0)

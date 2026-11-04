@@ -57,23 +57,27 @@ def main() -> None:
     parser.add_argument("--climatology-file", required=True)
     parser.add_argument("--year", type=int, required=True)
     parser.add_argument("--threshold", type=float, default=1.0)
-    # The history file and the climatology file are both POP output and are
-    # assumed to use the same variable names; override these if this run's
-    # POP output names them differently (see docs/RUNBOOK.md).
-    parser.add_argument("--sst-var", default="SST", help="SST variable name (default: SST)")
+    # The two files carry sea-surface temperature under different names. A
+    # CESM2 POP monthly history file has no 2-D SST, only 3-D TEMP, whose top
+    # level is the surface value (confirmed against a real pop.h file on
+    # 2026-11-04); build_climatology.py's output carries 2-D SST, as in the
+    # CESM2-LE tseries it is built from. The grid variables are shared.
+    parser.add_argument("--history-sst-var", default="TEMP",
+                        help="history-file temperature variable (default: TEMP, top level used)")
+    parser.add_argument("--climatology-sst-var", default="SST",
+                        help="climatology-file SST variable (default: SST)")
     parser.add_argument("--area-var", default="TAREA", help="cell-area variable name (default: TAREA)")
     parser.add_argument("--lat-var", default="TLAT", help="latitude variable name (default: TLAT)")
     parser.add_argument("--lon-var", default="TLONG", help="longitude variable name (default: TLONG)")
     args = parser.parse_args()
 
-    var_names = dict(
-        sst_var=args.sst_var, area_var=args.area_var,
-        lat_var=args.lat_var, lon_var=args.lon_var,
-    )
+    grid_names = dict(area_var=args.area_var, lat_var=args.lat_var, lon_var=args.lon_var)
 
     try:
-        sst_value = compute_nino34_sst(args.history_file, **var_names)
-        climatology_value = compute_nino34_sst(args.climatology_file, **var_names)
+        sst_value = compute_nino34_sst(
+            args.history_file, sst_var=args.history_sst_var, **grid_names)
+        climatology_value = compute_nino34_sst(
+            args.climatology_file, sst_var=args.climatology_sst_var, **grid_names)
         anomaly_c = compute_anomaly(sst_value, climatology_value)
         warming = is_warming(anomaly_c, args.threshold)
     except Exception as exc:

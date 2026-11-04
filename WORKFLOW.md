@@ -73,7 +73,8 @@ at or above a configured threshold (default 1.0°C).
   the matching ensemble member. Results are cached per
   `(forcing_variant, member, year)` so a given year is only built once.
 - **`check_warming.py`** computes the current year's Niño3.4 SST from the
-  just-finished run's archived June history file, subtracts the
+  just-finished run's archived June history file (the top level of POP's
+  3-D `TEMP`, since the monthly file has no 2-D `SST`), subtracts the
   climatology, and compares to the threshold. It prints one line of JSON,
   e.g. `{"year": 2054, "anomaly_c": 1.34, "warming": true}`. A non-zero
   exit code means the check itself failed (missing/corrupt data) — "no
