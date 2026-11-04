@@ -77,7 +77,7 @@ echo "##### setting up case $RUNNAME #####"
     cd "$CASEDIR"
   fi
 
-  run ./xmlchange JOB_WALLCLOCK_TIME=1:15:00 --subgroup case.run
+  run ./xmlchange JOB_WALLCLOCK_TIME=4:00:00 --subgroup case.run
   run ./xmlchange RUN_TYPE=branch
   run ./xmlchange GET_REFCASE=FALSE
   run ./xmlchange RUN_REFCASE="$REFCASE"
