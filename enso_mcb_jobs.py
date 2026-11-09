@@ -17,6 +17,10 @@ PASSTHROUGH_ENV_VARS = (
     "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TMPDIR",
     "LD_LIBRARY_PATH", "PYTHONPATH",
     "MODULEPATH", "MODULESHOME", "LMOD_CMD", "LMOD_PKG", "LMOD_SYSTEM_NAME",
+    # CIME's derecho machine config resolves $ENV{SCRATCH} (default
+    # CIME_OUTPUT_ROOT etc.); create_newcase aborts with
+    # "Undefined env var 'SCRATCH'" without it. WORK is the matching NCAR var.
+    "SCRATCH", "WORK",
 )
 
 

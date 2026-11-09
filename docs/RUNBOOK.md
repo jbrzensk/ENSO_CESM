@@ -226,9 +226,11 @@ full design.
    means anything CIME needs that is not on the list is simply absent.
 
    Currently allowed through: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
-   `LANG`, `LC_ALL`, `TMPDIR`, `LD_LIBRARY_PATH`, `PYTHONPATH`, and the
+   `LANG`, `LC_ALL`, `TMPDIR`, `LD_LIBRARY_PATH`, `PYTHONPATH`, the
    Lmod module-system variables (`MODULEPATH`, `MODULESHOME`, `LMOD_CMD`,
-   `LMOD_PKG`, `LMOD_SYSTEM_NAME`). If a live `case.build` or `case.submit`
+   `LMOD_PKG`, `LMOD_SYSTEM_NAME`), and NCAR's `SCRATCH`/`WORK` (CIME's
+   derecho machine config reads `$ENV{SCRATCH}`; without it
+   `create_newcase` fails with `Undefined env var 'SCRATCH'`). If a live `case.build` or `case.submit`
    fails with an environment-shaped error — `module: command not found`, a
    missing compiler/MPI wrapper, an unresolved shared library, a missing
    NetCDF/ESMF path — **check `PASSTHROUGH_ENV_VARS` first** and add the

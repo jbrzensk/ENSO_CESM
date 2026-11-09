@@ -424,6 +424,23 @@ def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
     assert env["PATH"] == "/usr/bin:/bin"
 
 
+def test_create_branch_case_passes_through_scratch_for_cime(monkeypatch):
+    captured = {}
+
+    def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
+        captured["env"] = env
+        return FakeCompletedProcess(stdout="CASEDIR=/cases/branch.009\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    # CIME's derecho config_machines.xml references $ENV{SCRATCH};
+    # create_newcase fails with "Undefined env var 'SCRATCH'" without it.
+    monkeypatch.setenv("SCRATCH", "/glade/derecho/scratch/jabrzenski")
+
+    jobs.create_branch_case(*CREATE_BRANCH_ARGS)
+
+    assert captured["env"]["SCRATCH"] == "/glade/derecho/scratch/jabrzenski"
+
+
 def test_create_branch_case_raises_when_no_casedir_reported(monkeypatch):
     def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
         return FakeCompletedProcess(stdout="no casedir here\n")
