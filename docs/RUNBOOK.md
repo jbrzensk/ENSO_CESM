@@ -217,25 +217,19 @@ full design.
    directories afterwards.
 
 7. **Know where to look if a live build or submit fails on the
-   environment.** `create_branch_case.sh` is not run with the full ambient
-   environment: `enso_mcb_jobs.create_branch_case()` builds the subprocess
-   env from an explicit allowlist, `PASSTHROUGH_ENV_VARS` (top of
-   `enso_mcb_jobs.py`), plus the pipeline's own configured variables. This
-   deliberately stops a stray `PROJECT`/`CASEROOT`/`SCRATCHROOT` in the PBS
-   job environment from overriding the configured values — but it also
-   means anything CIME needs that is not on the list is simply absent.
-
-   Currently allowed through: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
-   `LANG`, `LC_ALL`, `TMPDIR`, `LD_LIBRARY_PATH`, `PYTHONPATH`, the
-   Lmod module-system variables (`MODULEPATH`, `MODULESHOME`, `LMOD_CMD`,
-   `LMOD_PKG`, `LMOD_SYSTEM_NAME`), and NCAR's `SCRATCH`/`WORK` (CIME's
-   derecho machine config reads `$ENV{SCRATCH}`; without it
-   `create_newcase` fails with `Undefined env var 'SCRATCH'`). If a live `case.build` or `case.submit`
-   fails with an environment-shaped error — `module: command not found`, a
-   missing compiler/MPI wrapper, an unresolved shared library, a missing
-   NetCDF/ESMF path — **check `PASSTHROUGH_ENV_VARS` first** and add the
-   missing variable there. Compare against a working interactive shell
-   (`env | sort`) to find what the build actually depends on.
+   environment.** `create_branch_case.sh` runs with the orchestrator job's
+   full environment (CIME's derecho config reads site variables such as
+   `$ENV{SCRATCH}` and `$ENV{CESMDATAROOT}`, and the build needs the
+   compiler/MPI/module environment). `enso_mcb_jobs.create_branch_case()`
+   then overwrites every variable the script reads as configuration
+   (`PROJECT`, `CASEROOT`, `SCRATCHROOT`, …) with the values from
+   `enso_mcb_config.yaml`, and strips `DRY_RUN`, so a stray value in the PBS
+   job environment can't override them. If a live `case.build` or
+   `case.submit` fails with an environment-shaped error, such as
+   `Undefined env var`, `module: command not found`, a missing compiler or
+   MPI wrapper, or an unresolved shared library, compare the PBS job's
+   environment against a working interactive shell (`env | sort`): the
+   variable is missing from the job itself, not being filtered out.
 
 ## Bootstrapping a new lineage
 

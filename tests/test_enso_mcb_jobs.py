@@ -396,7 +396,7 @@ def test_create_branch_case_passes_every_configurable_variable(monkeypatch):
     assert env["SCRATCHROOT"] == "/glade/derecho/scratch/jabrzenski"
 
 
-def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
+def test_create_branch_case_configured_values_override_ambient_environment(monkeypatch):
     captured = {}
 
     def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
@@ -405,26 +405,25 @@ def test_create_branch_case_does_not_leak_ambient_environment(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     # A stray PROJECT/CASEROOT in the PBS job environment must not reach the
-    # script; only the explicitly configured values may.
+    # script; only the explicitly configured values may. A stray DRY_RUN must
+    # not silently turn the real build into a dry run.
     monkeypatch.setenv("PROJECT", "SOMEONE_ELSES_ALLOCATION")
     monkeypatch.setenv("CASEROOT", "/wrong/caseroot")
+    monkeypatch.setenv("SCRATCHROOT", "/wrong/scratch")
     monkeypatch.setenv("MCB_ON", "0")
-    monkeypatch.setenv("STRAY_VARIABLE", "leaked")
-    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("DRY_RUN", "1")
 
     jobs.create_branch_case(*CREATE_BRANCH_ARGS)
 
     env = captured["env"]
     assert env["PROJECT"] == "UCSD0083"
     assert env["CASEROOT"] == "/glade/work/jabrzenski/cases"
+    assert env["SCRATCHROOT"] == "/glade/derecho/scratch/jabrzenski"
     assert env["MCB_ON"] == "1"
-    assert "STRAY_VARIABLE" not in env
-    # PATH is passed through deliberately: the script needs it to find bash,
-    # cp, and the CIME tooling.
-    assert env["PATH"] == "/usr/bin:/bin"
+    assert "DRY_RUN" not in env
 
 
-def test_create_branch_case_passes_through_scratch_for_cime(monkeypatch):
+def test_create_branch_case_passes_through_site_environment_for_cime(monkeypatch):
     captured = {}
 
     def fake_run(cmd, cwd=None, env=None, capture_output=False, text=False, check=False):
@@ -432,13 +431,22 @@ def test_create_branch_case_passes_through_scratch_for_cime(monkeypatch):
         return FakeCompletedProcess(stdout="CASEDIR=/cases/branch.009\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    # CIME's derecho config_machines.xml references $ENV{SCRATCH};
-    # create_newcase fails with "Undefined env var 'SCRATCH'" without it.
+    # CIME's derecho config_machines.xml references site variables such as
+    # $ENV{SCRATCH} and $ENV{CESMDATAROOT}; create_newcase fails with
+    # "Undefined env var ..." without them. The build also needs the
+    # compiler/MPI/module environment, so everything is passed through.
     monkeypatch.setenv("SCRATCH", "/glade/derecho/scratch/jabrzenski")
+    monkeypatch.setenv("CESMDATAROOT", "/glade/campaign/cesm/cesmdata")
+    monkeypatch.setenv("NCAR_ROOT_NETCDF", "/opt/netcdf")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
 
     jobs.create_branch_case(*CREATE_BRANCH_ARGS)
 
-    assert captured["env"]["SCRATCH"] == "/glade/derecho/scratch/jabrzenski"
+    env = captured["env"]
+    assert env["SCRATCH"] == "/glade/derecho/scratch/jabrzenski"
+    assert env["CESMDATAROOT"] == "/glade/campaign/cesm/cesmdata"
+    assert env["NCAR_ROOT_NETCDF"] == "/opt/netcdf"
+    assert env["PATH"] == "/usr/bin:/bin"
 
 
 def test_create_branch_case_raises_when_no_casedir_reported(monkeypatch):

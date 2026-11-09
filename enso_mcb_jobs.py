@@ -6,22 +6,17 @@ import subprocess
 JOB_ID_RE = re.compile(r"(\d+)(?:\.\S+)?\s*$")
 CASEDIR_RE = re.compile(r"^CASEDIR=(.+)$", re.MULTILINE)
 
-# Environment variables passed through from the ambient environment when
-# invoking create_branch_case.sh. The script shells out to real CESM/CIME
-# tooling (create_newcase, case.setup, case.build), which needs a working
-# PATH, HOME and module environment. Everything the script itself reads as
-# configuration is set explicitly in create_branch_case()'s env dict, so a
-# stray PROJECT/CASEROOT/SCRATCHROOT in the PBS job environment can never
-# silently override the configured values.
-PASSTHROUGH_ENV_VARS = (
-    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "TMPDIR",
-    "LD_LIBRARY_PATH", "PYTHONPATH",
-    "MODULEPATH", "MODULESHOME", "LMOD_CMD", "LMOD_PKG", "LMOD_SYSTEM_NAME",
-    # CIME's derecho machine config resolves $ENV{SCRATCH} (default
-    # CIME_OUTPUT_ROOT etc.); create_newcase aborts with
-    # "Undefined env var 'SCRATCH'" without it. WORK is the matching NCAR var.
-    "SCRATCH", "WORK",
-)
+# create_branch_case.sh runs with the full ambient environment. It shells out
+# to real CESM/CIME tooling (create_newcase, case.setup, case.build), and
+# CIME's derecho machine config resolves arbitrary site variables
+# ($ENV{SCRATCH}, $ENV{CESMDATAROOT}, ...) plus the compiler/MPI/module
+# environment; an allowlist kept failing one missing variable at a time.
+# Everything the script itself reads as configuration is set explicitly in
+# create_branch_case()'s env dict *after* copying the ambient environment, so
+# a stray PROJECT/CASEROOT/SCRATCHROOT in the PBS job environment can never
+# override the configured values. The script's only other knob, DRY_RUN, is
+# stripped so it can't leak in either.
+STRIPPED_ENV_VARS = ("DRY_RUN",)
 
 
 def _run_checked(cmd, cwd=None, env=None):
@@ -192,9 +187,9 @@ def create_branch_case(script_path: str, ens: str, refcase: str, branch_number: 
                         resoln: str, compset: str, project: str,
                         srcdir: str, tagdir: str, scratchroot: str) -> str:
     env = {
-        name: os.environ[name]
-        for name in PASSTHROUGH_ENV_VARS
-        if name in os.environ
+        name: value
+        for name, value in os.environ.items()
+        if name not in STRIPPED_ENV_VARS
     }
     env.update({
         "ENS": ens,
