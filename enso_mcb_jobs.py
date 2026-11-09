@@ -18,6 +18,9 @@ CASEDIR_RE = re.compile(r"^CASEDIR=(.+)$", re.MULTILINE)
 # stripped so it can't leak in either.
 STRIPPED_ENV_VARS = ("DRY_RUN",)
 
+# The season build_climatology.py averages over; part of the cache key.
+CLIMATOLOGY_SEASON = "DJF"
+
 
 def _run_checked(cmd, cwd=None, env=None):
     """Run a command, raising a RuntimeError that *includes the captured output*.
@@ -147,8 +150,11 @@ def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: s
     same (variant, member, year) is reused rather than rebuilt. `variant`
     is included in the cache key so two different forcing variants (e.g.
     "smbb" vs "cmip6") for the same member/year never collide on one file.
+    The season ("DJF") is in the key too, so June climatologies cached under
+    the old June-based check are never picked up as DJF ones.
     """
-    output_path = os.path.join(cache_dir, f"nino34_climatology_{variant}_{member}_{year}.nc")
+    output_path = os.path.join(
+        cache_dir, f"nino34_climatology_{CLIMATOLOGY_SEASON}_{variant}_{member}_{year}.nc")
     if os.path.exists(output_path):
         return output_path
 
@@ -167,11 +173,11 @@ def build_climatology(python_exe: str, script_path: str, sst_dir: str, member: s
     return output_path
 
 
-def run_check_warming(python_exe: str, script_path: str, history_file: str,
+def run_check_warming(python_exe: str, script_path: str, history_files: list,
                        climatology_file: str, year: int, threshold: float) -> dict:
     result = subprocess.run(
         [python_exe, script_path,
-         "--history-file", history_file,
+         "--history-files", *history_files,
          "--climatology-file", climatology_file,
          "--year", str(year),
          "--threshold", str(threshold)],

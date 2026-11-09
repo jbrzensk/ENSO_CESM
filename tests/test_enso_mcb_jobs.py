@@ -260,7 +260,7 @@ def test_build_climatology_invokes_script_when_not_cached(tmp_path, monkeypatch)
         str(cache_dir),
     )
 
-    expected_output = str(cache_dir / "nino34_climatology_smbb_LE2-1011.001_2045.nc")
+    expected_output = str(cache_dir / "nino34_climatology_DJF_smbb_LE2-1011.001_2045.nc")
     assert result == expected_output
     assert captured["cmd"] == [
         "python3", "build_climatology.py",
@@ -299,7 +299,7 @@ def test_build_climatology_cache_key_includes_forcing_variant(tmp_path, monkeypa
 
 def test_build_climatology_skips_rebuild_when_cache_file_already_exists(tmp_path, monkeypatch):
     cache_dir = tmp_path
-    output_path = cache_dir / "nino34_climatology_smbb_LE2-1011.001_2045.nc"
+    output_path = cache_dir / "nino34_climatology_DJF_smbb_LE2-1011.001_2045.nc"
     output_path.write_text("already built")
 
     def fake_run(*a, **k):
@@ -328,8 +328,14 @@ def test_build_climatology_raises_on_nonzero_exit(monkeypatch, tmp_path):
         )
 
 
+HIST_FILES = ["hist.2054-12.nc", "hist.2055-01.nc", "hist.2055-02.nc"]
+
+
 def test_run_check_warming_parses_json_stdout(monkeypatch):
+    captured = {}
+
     def fake_run(cmd, capture_output, text):
+        captured["cmd"] = cmd
         return FakeCompletedProcess(
             stdout=json.dumps({"year": 2054, "anomaly_c": 1.3, "warming": True}),
             returncode=0,
@@ -337,9 +343,15 @@ def test_run_check_warming_parses_json_stdout(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    result = jobs.run_check_warming("python3", "check_warming.py", "hist.nc", "clim.nc", 2054, 1.0)
+    result = jobs.run_check_warming("python3", "check_warming.py", HIST_FILES, "clim.nc", 2054, 1.0)
 
     assert result == {"year": 2054, "anomaly_c": 1.3, "warming": True}
+    assert captured["cmd"] == [
+        "python3", "check_warming.py",
+        "--history-files", *HIST_FILES,
+        "--climatology-file", "clim.nc",
+        "--year", "2054", "--threshold", "1.0",
+    ]
 
 
 def test_run_check_warming_raises_on_nonzero_exit(monkeypatch):
@@ -349,7 +361,7 @@ def test_run_check_warming_raises_on_nonzero_exit(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     with pytest.raises(RuntimeError, match="boom"):
-        jobs.run_check_warming("python3", "check_warming.py", "hist.nc", "clim.nc", 2054, 1.0)
+        jobs.run_check_warming("python3", "check_warming.py", HIST_FILES, "clim.nc", 2054, 1.0)
 
 
 def test_create_branch_case_returns_parsed_casedir(monkeypatch):

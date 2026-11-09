@@ -7,7 +7,6 @@ from typing import Optional
 class Stage:
     RUNNING = "RUNNING"
     MCB_ON = "MCB_ON"
-    MCB_COOLDOWN = "MCB_COOLDOWN"
     FAILED = "FAILED"
     DONE = "DONE"
 

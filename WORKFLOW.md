@@ -9,32 +9,35 @@ open questions, see
 ## The experiment, in plain language
 
 One CESM2-LE ensemble member ("a lineage") is run forward one simulated
-year at a time. At the end of each year, the automation checks whether the
-central Pacific (Niño3.4 region) has warmed enough to look like an
-El Niño event. If it has, the automation branches off a new case with
-Marine Cloud Brightening (MCB) seeding turned on for June–August, then
-turns seeding back off and finishes out the year, before returning to the
-normal year-by-year run. This repeats every year through the configured
-end year (2100 by default).
+year at a time, where a lineage year Y runs from March 1 Y to March 1 Y+1.
+At the end of each year, the automation checks whether the central
+Pacific (Niño3.4 region) was warm enough over the just-finished DJF season
+(December Y, January–February Y+1) to look like an El Niño event. If it
+was, the automation goes back to that case's June 1 Y restart and branches
+off a new case with Marine Cloud Brightening (MCB) seeding turned on for
+June through February (JJASONDJF, 9 months), ending March 1 Y+1. The
+branch then turns seeding off and carries on as the lineage's case for
+the normal year-by-year run. This repeats every year through the
+configured end year.
 
 Nobody watches a queue or hand-edits a script for this: each PBS job, when
 it finishes, submits the next one itself. The chain runs unattended for
 the life of the experiment, only stopping to wait for a human when
 something actually fails.
 
-## The three-stage cycle
+## The two-stage cycle
 
 A lineage is always in exactly one of these stages:
 
-- **`RUNNING`** — the case is advancing a full calendar year at a time
-  (`STOP_N=12`, `STOP_OPTION=nmonths`). At the end of each completed year,
-  the automation checks for warming (see below).
-- **`MCB_ON`** — a *new branch case*, created off that year's June 1
-  restart, running June through August (`STOP_N=3`) with
-  `MCB_seeding_amt=1`.
-- **`MCB_COOLDOWN`** — the *same* case as `MCB_ON`, with seeding flipped
-  off (`MCB_seeding_amt=0`) and resubmitted September through December
-  (`STOP_N=4`) to land back on January 1.
+- **`RUNNING`** — the case is advancing a full year at a time, March 1 Y
+  to March 1 Y+1 (`STOP_N=12`, `STOP_OPTION=nmonths`). At the end of each
+  completed year, the automation checks DJF season Y for warming (see
+  below).
+- **`MCB_ON`** — a *new branch case*, created off the June 1 Y restart of
+  the case that just finished, running June through February (`STOP_N=9`)
+  with `MCB_seeding_amt=1`, ending March 1 Y+1. When it finishes, seeding
+  is flipped off (`MCB_seeding_amt=0`) in that same branch case and it is
+  resubmitted as the lineage's `RUNNING` case for year Y+1.
 
 Two terminal stages end the chain: **`DONE`** (the lineage reached the
 configured end year) and **`FAILED`** (something went wrong and needs a
@@ -43,15 +46,13 @@ human — see the Runbook).
 ```mermaid
 stateDiagram-v2
     [*] --> RUNNING: bootstrap
-    RUNNING --> RUNNING: no warming\nresubmit STOP_N=12 (year Y+1)
-    RUNNING --> MCB_ON: warming detected\ncreate branch, Jun-Aug, seeding on
+    RUNNING --> RUNNING: no DJF warming\nresubmit Mar-Mar, STOP_N=12 (year Y+1)
+    RUNNING --> MCB_ON: DJF warming detected\nbranch from Y-06-01, Jun-Feb, seeding on
     RUNNING --> DONE: Y+1 exceeds end_year
-    MCB_ON --> MCB_COOLDOWN: flip seeding off\nresubmit Sep-Dec, STOP_N=4
-    MCB_COOLDOWN --> RUNNING: resubmit STOP_N=12 (year Y+1)
-    MCB_COOLDOWN --> DONE: Y+1 exceeds end_year
+    MCB_ON --> RUNNING: flip seeding off\nresubmit Mar-Mar, STOP_N=12 (year Y+1)
+    MCB_ON --> DONE: Y+1 exceeds end_year
     RUNNING --> FAILED: any step raises
     MCB_ON --> FAILED: any step raises
-    MCB_COOLDOWN --> FAILED: any step raises
     DONE --> [*]
     FAILED --> [*]
 ```
@@ -61,24 +62,31 @@ increments by 1 from the previous case in the lineage, `refcase` is always
 the case that just finished, and the branch start date is always `Y-06-01`.
 There is no per-cycle human judgment call.
 
+The case that warmed is not continued after a branch: it stops at March 1
+Y+1, and its June Y – February Y+1 output is the no-MCB counterpart of the
+branch's MCB period.
+
 ## The El Niño check
 
-"Warming detected" means: this year's June area-weighted mean SST over the
-Niño3.4 box (5°S–5°N, 170°W–120°W) minus a climatological June baseline is
-at or above a configured threshold (default 1.0°C).
+"Warming detected" means: the DJF-mean (December Y, January–February Y+1)
+area-weighted SST over the Niño3.4 box (5°S–5°N, 170°W–120°W) minus a
+climatological DJF baseline is at or above a configured threshold
+(default 1.0°C). The three months are weighted equally on both sides.
 
-- **`build_climatology.py`** builds that baseline on demand: the mean June
-  Niño3.4 SST over the 30 years immediately preceding the year being
-  checked, from the CESM2-LE archive's monthly SST time-series files for
-  the matching ensemble member. Results are cached per
-  `(forcing_variant, member, year)` so a given year is only built once.
-- **`check_warming.py`** computes the current year's Niño3.4 SST from the
-  just-finished run's archived June history file (the top level of POP's
-  3-D `TEMP`, since the monthly file has no 2-D `SST`), subtracts the
-  climatology, and compares to the threshold. It prints one line of JSON,
-  e.g. `{"year": 2054, "anomaly_c": 1.34, "warming": true}`. A non-zero
-  exit code means the check itself failed (missing/corrupt data) — "no
-  warming" is a normal, successful result, not a failure.
+- **`build_climatology.py`** builds that baseline on demand: the mean
+  Niño3.4 SST over the 30 DJF seasons immediately preceding the season
+  being checked (December Y−30 through February Y), from the CESM2-LE
+  archive's monthly SST time-series files for the matching ensemble
+  member. Results are cached per `(season, forcing_variant, member, year)`
+  so a given season is only built once.
+- **`check_warming.py`** computes season Y's Niño3.4 SST from the
+  just-finished run's archived December, January and February history
+  files (the top level of POP's 3-D `TEMP`, since the monthly file has no
+  2-D `SST`), subtracts the climatology, and compares to the threshold. It
+  prints one line of JSON, e.g.
+  `{"year": 2054, "anomaly_c": 1.34, "warming": true}`. A non-zero exit
+  code means the check itself failed (missing/corrupt data) — "no warming"
+  is a normal, successful result, not a failure.
 
 ## One orchestrator invocation
 
@@ -135,7 +143,7 @@ to recover from each.
 | `enso_mcb_state.py` | The `CycleState` dataclass, `Stage` constants, and atomic JSON load/save (write to a temp file, then `os.replace`). |
 | `enso_mcb_config.py` / `enso_mcb_config.yaml` | Required-key validation and the fixed, per-deployment knobs (paths, project, threshold, end year, etc.). |
 | `check_warming.py` | The El Niño check: Niño3.4 SST anomaly vs. a climatology reference, threshold comparison, JSON result. |
-| `build_climatology.py` | Builds (and caches) the rolling 30-year June Niño3.4 climatology baseline used by `check_warming.py`. |
+| `build_climatology.py` | Builds (and caches) the rolling 30-season DJF Niño3.4 climatology baseline used by `check_warming.py`. |
 | `create_branch_case.sh` | Parameterized (via environment variables) CESM branch-case creator, called programmatically by the orchestrator for every `MCB_ON` branch. Supports `DRY_RUN=1` to print the commands it would run instead of executing them. |
 | `create_ENSO_controller_case.sh` | The original, hand-edited, one-off script this pipeline grew out of. Still used manually to create the very *first* case in a lineage, before the orchestrator's `--bootstrap` mode adopts it. |
 | `orchestrator_wrapper.sh` | The actual PBS script `qsub` submits: sets `#PBS` resource directives, `cd`s to the repo checkout, and runs `enso_mcb_orchestrator.py` with the `ENSO_Control` conda interpreter by absolute path (never activated, so CIME keeps the system Python). |

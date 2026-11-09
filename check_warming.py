@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Computes the Nino3.4 SST anomaly for a CESM ocean history file against
-a fixed climatology reference file, and reports whether it crosses the
-configured warming threshold."""
+"""Computes the seasonal (DJF) Nino3.4 SST anomaly for a set of CESM monthly
+ocean history files against a climatology reference file, and reports
+whether it crosses the configured warming threshold.
+
+The seasonal value is the equally weighted mean of each monthly file's
+Nino3.4 SST, matching how build_climatology.py averages its months."""
 import argparse
 import json
 import sys
@@ -43,6 +46,14 @@ def compute_nino34_sst(history_file: str, sst_var: str = "SST",
     return result
 
 
+def compute_seasonal_nino34_sst(history_files: list, **kwargs) -> float:
+    """Mean Nino3.4 SST over several monthly history files (e.g. Dec, Jan, Feb)."""
+    if not history_files:
+        raise ValueError("no history files given")
+    values = [compute_nino34_sst(path, **kwargs) for path in history_files]
+    return sum(values) / len(values)
+
+
 def compute_anomaly(sst_value: float, climatology_value: float) -> float:
     return sst_value - climatology_value
 
@@ -53,7 +64,9 @@ def is_warming(anomaly_c: float, threshold_c: float) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--history-file", required=True)
+    parser.add_argument("--history-files", nargs="+", required=True,
+                        help="monthly POP history files to average (the DJF season: "
+                             "Dec, Jan, Feb)")
     parser.add_argument("--climatology-file", required=True)
     parser.add_argument("--year", type=int, required=True)
     parser.add_argument("--threshold", type=float, default=1.0)
@@ -74,8 +87,8 @@ def main() -> None:
     grid_names = dict(area_var=args.area_var, lat_var=args.lat_var, lon_var=args.lon_var)
 
     try:
-        sst_value = compute_nino34_sst(
-            args.history_file, sst_var=args.history_sst_var, **grid_names)
+        sst_value = compute_seasonal_nino34_sst(
+            args.history_files, sst_var=args.history_sst_var, **grid_names)
         climatology_value = compute_nino34_sst(
             args.climatology_file, sst_var=args.climatology_sst_var, **grid_names)
         anomaly_c = compute_anomaly(sst_value, climatology_value)

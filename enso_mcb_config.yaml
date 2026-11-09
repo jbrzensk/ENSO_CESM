@@ -12,8 +12,8 @@ scratchroot: "/glade/derecho/scratch/jabrzenski"
 # b.e21.BSSP370smbb.f09_g17.LE2-1011.001.pop.h.SST.201501-202412.nc).
 # build_climatology.py globs this directory for the member matching this
 # lineage's `ens` and `climatology_member_ordinal` below, to build a
-# rolling 30-year June climatology for whatever year the pipeline is
-# currently checking.
+# rolling 30-season DJF (Dec-Jan-Feb) climatology for whatever DJF season
+# the pipeline is currently checking.
 climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn/proc/tseries/month_1/SST"
 
 # The ordinal suffix of this lineage's ensemble member (LE2-{ens}.{ordinal}).
@@ -24,7 +24,7 @@ climatology_sst_dir: "/glade/campaign/collections/gdex/data/d651056/CESM2-LE/ocn
 climatology_member_ordinal: "005"
 
 # Where per-year built climatology files are cached (one per variant/
-# lineage/year, named nino34_climatology_{variant}_LE2-{ens}.{ordinal}_{year}.nc).
+# lineage/year, named nino34_climatology_DJF_{variant}_LE2-{ens}.{ordinal}_{year}.nc).
 # A previously-built (variant, member, year) file is reused, not rebuilt.
 climatology_cache_dir: "/glade/work/jabrzenski/cases/ENSO_walker/climatology_cache"
 

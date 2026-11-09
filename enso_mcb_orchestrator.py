@@ -13,11 +13,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("enso_mcb_orchestrator")
 
 
-def history_file_path(config: dict, case_name: str, year: int) -> str:
-    return os.path.join(
-        config["scratchroot"], "archive", case_name, "ocn", "hist",
-        f"{case_name}.pop.h.{year:04d}-06.nc",
-    )
+def history_file_paths(config: dict, case_name: str, year: int) -> list:
+    """The archived POP monthly history files for DJF season `year`:
+    December of `year`, then January and February of `year + 1`."""
+    hist_dir = os.path.join(config["scratchroot"], "archive", case_name, "ocn", "hist")
+    return [
+        os.path.join(hist_dir, f"{case_name}.pop.h.{y:04d}-{m:02d}.nc")
+        for y, m in ((year, 12), (year + 1, 1), (year + 1, 2))
+    ]
 
 
 def run_cycle(state_file: str, config_file: str) -> None:
@@ -47,7 +50,7 @@ def run_cycle(state_file: str, config_file: str) -> None:
         )
         warming_result = jobs.run_check_warming(
             config["python_exe"], config["check_warming_script"],
-            history_file_path(config, state.case_name, state.year),
+            history_file_paths(config, state.case_name, state.year),
             climatology_file, state.year, config["warming_threshold_c"],
         )
         log.info("Warming check for %s year %s: %s", state.case_name, state.year, warming_result)
@@ -96,7 +99,15 @@ class StateFileExistsError(Exception):
 
 
 def bootstrap(state_file: str, config_file: str, lineage_name: str,
-              initial_refcase: str, start_year: int, branch_number: int = 0) -> None:
+              initial_refcase: str, start_year: int, branch_number: int = 0,
+              stop_n: int = 12) -> None:
+    """Adopt an existing case and submit its first segment.
+
+    `start_year` is the lineage year Y whose DJF season is checked after the
+    first segment, so that segment must end on Mar 1 of Y+1. A case sitting
+    at Mar 1 Y needs the default stop_n=12; a case sitting at, e.g., Jan 1
+    Y+1 needs stop_n=2.
+    """
     # A second bootstrap would resubmit the case and start a second
     # orchestrator chain alongside the one already driving it. A state file
     # left by a bootstrap that failed before submitting anything must be
@@ -120,7 +131,7 @@ def bootstrap(state_file: str, config_file: str, lineage_name: str,
     # settings (notably RESUBMIT>0) that conflict with orchestrated running,
     # so force the pipeline's requirements before the first submission.
     jobs.configure_case_for_orchestration(casedir)
-    job_id = jobs.resubmit_case(casedir, 12)
+    job_id = jobs.resubmit_case(casedir, stop_n)
     jobs.submit_orchestrator_self(
         config["orchestrator_wrapper_script"], job_id, state_file,
         config["project"], config["orchestrator_queue"],
@@ -155,6 +166,12 @@ def main() -> None:
         help="branch number of the case being bootstrapped from; the first MCB "
              "branch this lineage creates will be this number + 1 (default: 0)",
     )
+    parser.add_argument(
+        "--stop-n", type=int, default=12,
+        help="months to run in the bootstrap segment; it must end on Mar 1 of "
+             "start-year + 1 so the DJF check can run (default: 12, for a case "
+             "sitting at Mar 1 of start-year)",
+    )
     args = parser.parse_args()
 
     try:
@@ -162,7 +179,8 @@ def main() -> None:
             if not (args.lineage_name and args.initial_refcase and args.start_year):
                 parser.error("--bootstrap requires --lineage-name, --initial-refcase, and --start-year")
             bootstrap(args.state_file, args.config_file, args.lineage_name,
-                      args.initial_refcase, args.start_year, args.branch_number)
+                      args.initial_refcase, args.start_year, args.branch_number,
+                      args.stop_n)
         else:
             run_cycle(args.state_file, args.config_file)
     except StateFileExistsError as exc:

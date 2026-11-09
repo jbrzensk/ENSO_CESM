@@ -2,8 +2,9 @@
 
 Automation for a CESM2-LE Marine Cloud Brightening (MCB) experiment: it
 watches a running ensemble member for central-Pacific (Niño3.4) warming
-and, when detected, automatically branches off a new case with MCB seeding
-turned on for that year's June–August, then returns to the normal
+in DJF and, when detected, automatically goes back to that year's June
+restart and branches off a new case with MCB seeding turned on for June
+through February (JJASONDJF), then returns to the normal March-to-March
 year-by-year run. It runs unattended on the HPC system (Derecho) as a
 self-chaining sequence of PBS jobs, for the life of the experiment (through
 2100 by default).
@@ -21,7 +22,7 @@ cycle, the warming check, and how each piece fits together (with diagrams).
 | `enso_mcb_state.py` | Lineage state (`CycleState`, `Stage`) and its JSON persistence. |
 | `enso_mcb_config.py`, `enso_mcb_config.yaml` | Config loading/validation and this deployment's fixed settings. |
 | `check_warming.py` | Computes the Niño3.4 SST anomaly and compares it to the warming threshold. |
-| `build_climatology.py` | Builds/caches the rolling 30-year June Niño3.4 climatology baseline. |
+| `build_climatology.py` | Builds/caches the rolling 30-season DJF Niño3.4 climatology baseline. |
 | `create_branch_case.sh` | Parameterized CESM branch-case creator, called by the orchestrator (`DRY_RUN=1` supported). |
 | `create_ENSO_controller_case.sh` | Original hand-edited script; still used manually for a lineage's first case. |
 | `orchestrator_wrapper.sh` | The PBS script actually submitted to the scheduler. |

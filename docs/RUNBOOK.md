@@ -13,7 +13,7 @@ full design.
      — the CESM2-LE archive of monthly SST tseries files (one file per
      ensemble member per ~10-year chunk, both historical and SSP370
      scenario phases live in this same directory). `build_climatology.py`
-     builds each cycle's rolling 30-year June climatology from here, for
+     builds each cycle's rolling 30-season DJF climatology from here, for
      the ensemble member matching this lineage's `ens` and
      `climatology_member_ordinal` (`LE2-{ens}.{climatology_member_ordinal}`).
      A real file's `ncdump -h` confirms `SST`/`TAREA`/`TLAT`/`TLONG` are
@@ -95,10 +95,10 @@ full design.
    ```
 
    `enso_mcb_jobs.parse_last_job_id` and
-   `enso_mcb_orchestrator.history_file_path` assume a specific format
+   `enso_mcb_orchestrator.history_file_paths` assume a specific format
    (see the spec's "Open item" notes). If what you see differs, adjust
    `JOB_ID_RE` in `enso_mcb_jobs.py` or the path template in
-   `history_file_path` before bootstrapping.
+   `history_file_paths` before bootstrapping.
 
    `parse_last_job_id` prefers a line naming `st_archive` (CIME's archive
    job name) and only falls back to the last line of output, so also
@@ -118,13 +118,13 @@ full design.
 
    **POP history file naming confirmed on 2026-09-10** against the same
    case's first archived segment: the archive directory landed exactly at
-   `history_file_path`'s expected
+   `history_file_paths`' expected
    `$SCRATCHROOT/archive/<case_name>/ocn/hist/`, and the monthly file was
    named `b.e21.BSSP370smbb.f09_g17.ENSO_JJASONDJF_375cm3.1091.branch.000.pop.h.2030-01.nc`
    — an exact match for `<case_name>.pop.h.<YYYY>-<MM>.nc`. (POP also
    writes a separate daily-mean stream, `*.pop.h.nday1.<YYYY>-<MM>-<DD>.nc`,
    which the pipeline never references — no collision risk, since
-   `history_file_path` builds an exact filename rather than a glob.) No
+   `history_file_paths` builds exact filenames rather than a glob.) No
    code change needed.
 
    **History file variables confirmed on 2026-11-04** against
@@ -136,14 +136,14 @@ full design.
    from the climatology file (`--climatology-sst-var`, default `SST`).
    The first lineage to reach a warming check failed with
    `No variable named 'SST'` before this was fixed. For a new case with
-   customised POP output (`user_nl_pop` / tavg settings), list the June
+   customised POP output (`user_nl_pop` / tavg settings), list a December
    file's variables before bootstrapping:
 
    ```bash
    /glade/work/jabrzenski/conda-envs/ENSO_Control/bin/python3 -c "
    import sys, xarray as xr; ds = xr.open_dataset(sys.argv[1])
    for v in ('TEMP','TAREA','TLAT','TLONG'): print(v, ds[v].dims if v in ds else 'MISSING')" \
-     /glade/derecho/scratch/jabrzenski/archive/<case>/ocn/hist/<case>.pop.h.<YYYY>-06.nc
+     /glade/derecho/scratch/jabrzenski/archive/<case>/ocn/hist/<case>.pop.h.<YYYY>-12.nc
    ```
 
 4. Confirm the PBS queue for the orchestrator job itself
@@ -207,7 +207,7 @@ full design.
    ```bash
    cd /glade/u/home/jabrzenski/github/ENSO_CESM
    time env ENS=1091 REFCASE=<an-existing-case> BRANCH_NUMBER=999 \
-       STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=3 MCB_ON=1 \
+       STARTDATE=<YYYY-MM-DD-with-an-existing-restart> STOP_N=9 MCB_ON=1 \
        bash create_branch_case.sh
    ```
 
@@ -287,14 +287,18 @@ These values are for the current deployment (`ens: "1091"` in
   configured. When adopting a case with any other suffix, pass it
   explicitly, or the first MCB branch would be `branch.001` and could
   collide with an existing case.
-- `--start-year` is the year of the first June inside the 12-month segment
-  bootstrap submits, which starts where the case stopped (step 3). For
-  example, `create_ENSO_controller_case.sh` as configured starts on
-  2030-01-01 and runs four 2-month segments (`STOP_N=2`, `RESUBMIT=3`),
-  stopping at 2030-09-01. Bootstrap's segment then runs to 2031-09-01, so
-  use `--start-year 2031`. A year too early (2030 here) makes the first
-  check read the June file left over from the initial run, and every later
-  check a year behind the simulation.
+- `--start-year` and `--stop-n` together must make bootstrap's segment
+  end on **March 1** of `start-year + 1`, because the first check reads
+  DJF season `start-year` (December `start-year`, January–February
+  `start-year + 1`), and every later segment then runs March to March.
+  The segment starts where the case stopped (step 3), so `--stop-n` is the
+  number of months from there to the next March 1 (default 12, for a case
+  sitting at March 1). For example, `create_ENSO_controller_case.sh` as
+  configured stops at 2030-09-01: use `--start-year 2030 --stop-n 6` to
+  run to 2031-03-01 and check DJF 2030. A case sitting at 2033-01-01 needs
+  `--start-year 2032 --stop-n 2`. If the segment doesn't end on March 1,
+  the first check reads the wrong months (or fails on a missing file) and
+  every later segment is offset from the DJF season.
 
 Bootstrap writes the state file first, then forces the XML settings the
 pipeline requires onto the adopted case (`RESUBMIT=0`,
@@ -400,7 +404,7 @@ steps are for a lineage that was already running.
 ### Signature B — a CESM run or archive job failed
 
 Symptoms: **the state file still shows a normal, non-terminal stage**
-(`RUNNING`/`MCB_ON`/`MCB_COOLDOWN`) and never changes; `qstat -u $USER`
+(`RUNNING`/`MCB_ON`) and never changes; `qstat -u $USER`
 shows nothing for this lineage; you received a PBS abort email for the
 CESM job.
 
@@ -472,7 +476,7 @@ If you also cancel the CESM run or `st_archive` job, that segment is left
 unfinished, and it has to be completed before the orchestrator runs
 again. Running the orchestrator straight away would treat it as finished
 (an `MCB_ON` case, for example, would have seeding turned off partway
-through June–August). Resume as in Signature B step 3 instead.
+through June–February). Resume as in Signature B step 3 instead.
 
 Either way, a deliberately stopped lineage looks exactly like Signature B
 (non-terminal stage, empty queue), so leave yourself a note if you intend

@@ -73,7 +73,7 @@ def test_run_cycle_branches_to_mcb_on_when_warming_detected(monkeypatch, config_
 
 
 def test_run_cycle_derives_climatology_member_from_ens_and_ordinal_and_passes_result_through(
-        monkeypatch, config_file, state_file):
+        monkeypatch, config_file, state_file, tmp_path):
     climatology_calls = {}
     monkeypatch.setattr(jobs, "build_climatology",
                          lambda *a, **k: climatology_calls.update(args=a) or "/cache/nino34_climatology.nc")
@@ -92,8 +92,16 @@ def test_run_cycle_derives_climatology_member_from_ens_and_ordinal_and_passes_re
     assert year == 2054
     assert script == "build_climatology.py"
 
-    (_, _, _, climatology_file_arg, _, _) = warming_calls["args"]
+    (_, _, history_files_arg, climatology_file_arg, year_arg, _) = warming_calls["args"]
     assert climatology_file_arg == "/cache/nino34_climatology.nc"
+    assert year_arg == 2054
+    # DJF 2054: Dec 2054, Jan 2055, Feb 2055 from the current case's archive.
+    hist = f"{tmp_path}/scratch/archive/branch.008/ocn/hist"
+    assert history_files_arg == [
+        f"{hist}/branch.008.pop.h.2054-12.nc",
+        f"{hist}/branch.008.pop.h.2055-01.nc",
+        f"{hist}/branch.008.pop.h.2055-02.nc",
+    ]
 
 
 def test_run_cycle_passes_every_configured_value_to_create_branch_case(
@@ -116,7 +124,7 @@ def test_run_cycle_passes_every_configured_value_to_create_branch_case(
     assert refcase == "branch.008"
     assert branch_number == 9
     assert startdate == "2054-06-01"
-    assert (stop_n, mcb_on) == (3, True)
+    assert (stop_n, mcb_on) == (9, True)
     assert caseroot == f"{tmp_path}/cases"
     assert resoln == "f09_g17"
     assert compset == "BSSP370smbb"
@@ -130,7 +138,9 @@ def test_run_cycle_resubmits_next_year_when_no_warming(monkeypatch, config_file,
     monkeypatch.setattr(jobs, "build_climatology", lambda *a, **k: "/fake/climatology.nc")
     monkeypatch.setattr(jobs, "run_check_warming",
                          lambda *a, **k: {"year": 2054, "anomaly_c": 0.2, "warming": False})
-    monkeypatch.setattr(jobs, "resubmit_case", lambda casedir, stop_n: "22222")
+    resubmits = []
+    monkeypatch.setattr(jobs, "resubmit_case",
+                         lambda casedir, stop_n: resubmits.append(stop_n) or "22222")
     monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
 
     orch.run_cycle(state_file, config_file)
@@ -139,23 +149,29 @@ def test_run_cycle_resubmits_next_year_when_no_warming(monkeypatch, config_file,
     assert new_state.stage == Stage.RUNNING
     assert new_state.case_name == "branch.008"
     assert new_state.year == 2055
+    assert resubmits == [12]
 
 
-def test_run_cycle_flips_mcb_off_after_mcb_on_segment(monkeypatch, config_file, tmp_path):
+def test_run_cycle_flips_mcb_off_and_runs_next_year_after_mcb_segment(monkeypatch, config_file, tmp_path):
     state_path = tmp_path / "state.json"
     save_state(str(state_path), CycleState(
         lineage_name="l", case_name="branch.009", stage=Stage.MCB_ON,
         branch_number=9, year=2054,
     ))
-    monkeypatch.setattr(jobs, "flip_mcb_off", lambda casedir: None)
-    monkeypatch.setattr(jobs, "resubmit_case", lambda casedir, stop_n: "33333")
+    calls = []
+    monkeypatch.setattr(jobs, "flip_mcb_off", lambda casedir: calls.append(("flip", casedir)))
+    monkeypatch.setattr(jobs, "resubmit_case",
+                         lambda casedir, stop_n: calls.append(("resubmit", casedir, stop_n)) or "33333")
     monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
 
     orch.run_cycle(str(state_path), config_file)
 
     new_state = load_state(str(state_path))
-    assert new_state.stage == Stage.MCB_COOLDOWN
-    assert new_state.year == 2054
+    assert new_state.stage == Stage.RUNNING
+    assert new_state.year == 2055
+    assert new_state.case_name == "branch.009"
+    casedir = f"{tmp_path}/cases/branch.009"
+    assert calls == [("flip", casedir), ("resubmit", casedir, 12)]
 
 
 def test_run_cycle_stops_and_marks_done_past_end_year(monkeypatch, config_file, tmp_path):
@@ -354,3 +370,24 @@ def test_mark_failed_preserves_original_stage_when_called_twice(tmp_path):
     assert state.stage == Stage.FAILED
     assert state.failed_from_stage == Stage.MCB_ON
     assert "second failure" in state.failure_reason
+
+
+def test_main_bootstrap_threads_stop_n_from_cli(monkeypatch, config_file, tmp_path):
+    """A case sitting at Jan 1 Y+1 needs only Jan-Feb (stop-n 2) to reach
+    Mar 1 Y+1, where DJF season Y can be checked."""
+    state_path = tmp_path / "bootstrap_state.json"
+    calls = bootstrap_recorder(monkeypatch)
+    monkeypatch.setattr(jobs, "submit_orchestrator_self", lambda *a, **k: None)
+    monkeypatch.setattr("sys.argv", [
+        "enso_mcb_orchestrator.py",
+        "--state-file", str(state_path), "--config-file", config_file,
+        "--bootstrap", "--lineage-name", "enso_mcb_1091r",
+        "--initial-refcase", "branch.000", "--start-year", "2032",
+        "--stop-n", "2",
+    ])
+
+    orch.main()
+
+    assert calls[-1] == ("resubmit_case", calls[-1][1], 2)
+    state = load_state(str(state_path))
+    assert (state.stage, state.year, state.branch_number) == (Stage.RUNNING, 2032, 0)

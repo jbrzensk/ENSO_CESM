@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from check_warming import compute_anomaly, compute_nino34_sst, is_warming
+from check_warming import (compute_anomaly, compute_nino34_sst, compute_seasonal_nino34_sst,
+                           is_warming)
 
 SCRIPT = str(pathlib.Path(__file__).resolve().parent.parent / "check_warming.py")
 
@@ -88,7 +89,7 @@ def test_cli_prints_warming_json(tmp_path):
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
-         "--history-file", str(history_file),
+         "--history-files", str(history_file),
          "--climatology-file", str(climatology_file),
          "--year", "2054", "--threshold", "1.0"],
         capture_output=True, text=True,
@@ -107,7 +108,7 @@ def test_cli_fails_clearly_on_missing_history_file(tmp_path):
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
-         "--history-file", str(tmp_path / "does_not_exist.nc"),
+         "--history-files", str(tmp_path / "does_not_exist.nc"),
          "--climatology-file", str(climatology_file),
          "--year", "2054"],
         capture_output=True, text=True,
@@ -181,7 +182,7 @@ def test_cli_accepts_custom_variable_names(tmp_path):
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
-         "--history-file", str(history_file),
+         "--history-files", str(history_file),
          "--climatology-file", str(climatology_file),
          "--year", "2054", "--threshold", "1.0",
          "--history-sst-var", "TEMP", "--climatology-sst-var", "CLIM_SST",
@@ -207,7 +208,7 @@ def test_cli_fails_on_default_variable_names_when_file_uses_others(tmp_path):
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
-         "--history-file", str(history_file),
+         "--history-files", str(history_file),
          "--climatology-file", str(climatology_file),
          "--year", "2054"],
         capture_output=True, text=True,
@@ -233,7 +234,7 @@ def test_cli_fails_on_zero_area_mask(tmp_path):
 
     result = subprocess.run(
         [sys.executable, SCRIPT,
-         "--history-file", str(history_file),
+         "--history-files", str(history_file),
          "--climatology-file", str(climatology_file),
          "--year", "2054", "--history-sst-var", "SST"],
         capture_output=True, text=True,
@@ -252,3 +253,61 @@ def test_compute_nino34_sst_reads_top_level_of_3d_temp(tmp_path):
     result = compute_nino34_sst(str(history_file), sst_var="TEMP")
 
     assert result == pytest.approx(28.0)
+
+
+def test_compute_seasonal_nino34_sst_averages_the_monthly_files(tmp_path):
+    files = []
+    for name, value in (("dec.nc", 28.0), ("jan.nc", 29.0), ("feb.nc", 30.0)):
+        make_pop_monthly_history_file(tmp_path / name, sst_value_inside_box=value,
+                                      sst_value_outside_box=15.0)
+        files.append(str(tmp_path / name))
+
+    assert compute_seasonal_nino34_sst(files, sst_var="TEMP") == pytest.approx(29.0)
+
+
+def test_compute_seasonal_nino34_sst_rejects_empty_file_list():
+    with pytest.raises(ValueError, match="no history files"):
+        compute_seasonal_nino34_sst([])
+
+
+def test_cli_averages_djf_history_files_before_taking_the_anomaly(tmp_path):
+    """Dec/Jan/Feb Nino3.4 of 28/29/30 -> DJF mean 29.0; against a 27.5
+    climatology that is a 1.5 C anomaly."""
+    files = []
+    for name, value in (("dec.nc", 28.0), ("jan.nc", 29.0), ("feb.nc", 30.0)):
+        make_pop_monthly_history_file(tmp_path / name, sst_value_inside_box=value,
+                                      sst_value_outside_box=15.0)
+        files.append(str(tmp_path / name))
+    climatology_file = tmp_path / "clim.nc"
+    make_synthetic_history_file(climatology_file, sst_value_inside_box=27.5, sst_value_outside_box=15.0)
+
+    result = subprocess.run(
+        [sys.executable, SCRIPT,
+         "--history-files", *files,
+         "--climatology-file", str(climatology_file),
+         "--year", "2054", "--threshold", "1.0"],
+        capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["anomaly_c"] == pytest.approx(1.5, abs=0.01)
+    assert payload["warming"] is True
+
+
+def test_cli_fails_if_any_djf_month_is_missing(tmp_path):
+    present = tmp_path / "dec.nc"
+    make_pop_monthly_history_file(present, sst_value_inside_box=28.0, sst_value_outside_box=15.0)
+    climatology_file = tmp_path / "clim.nc"
+    make_synthetic_history_file(climatology_file, sst_value_inside_box=27.5, sst_value_outside_box=15.0)
+
+    result = subprocess.run(
+        [sys.executable, SCRIPT,
+         "--history-files", str(present), str(tmp_path / "jan_missing.nc"),
+         "--climatology-file", str(climatology_file),
+         "--year", "2054"],
+        capture_output=True, text=True,
+    )
+
+    assert result.returncode == 1
+    assert "error" in json.loads(result.stderr)

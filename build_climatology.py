@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Builds a rolling climatological June Nino3.4 SST field for a CESM2-LE
-ensemble member from the archive's monthly SST tseries files, and writes it
-as a NetCDF file with the same SST/TAREA/TLAT/TLONG shape check_warming.py
-already expects (so check_warming.py itself needs no changes to consume it).
+"""Builds a rolling climatological DJF (Dec-Jan-Feb) Nino3.4 SST field for a
+CESM2-LE ensemble member from the archive's monthly SST tseries files, and
+writes it as a NetCDF file with the same SST/TAREA/TLAT/TLONG shape
+check_warming.py expects.
 
-The climatology for simulation year Y is the mean of June SST over the
-BASELINE_YEARS years immediately preceding Y: [Y - BASELINE_YEARS, Y - 1].
+DJF season Y is December of year Y plus January and February of year Y+1.
+The climatology for season Y is the mean over the BASELINE_YEARS seasons
+immediately preceding it, [Y - BASELINE_YEARS, Y - 1], i.e. every monthly
+field from December (Y - BASELINE_YEARS) through February Y, each month
+weighted equally.
 """
 import argparse
 import glob
@@ -19,6 +22,14 @@ import xarray as xr
 
 BASELINE_YEARS = 30
 FILENAME_RANGE_RE = re.compile(r"\.(\d{6})-(\d{6})\.nc$")
+
+# (offset from the season year, calendar month) for each month of DJF season Y.
+DJF_MONTHS = ((0, 12), (1, 1), (1, 2))
+
+
+def season_months(season_year: int) -> list:
+    """The (year, month) pairs making up DJF season `season_year`."""
+    return [(season_year + offset, month) for offset, month in DJF_MONTHS]
 
 
 def file_year_range(path: str) -> tuple:
@@ -40,7 +51,7 @@ def find_sst_files(sst_dir: str, member: str, variant: str,
     member numbers) — this experiment's own scripts are all built on the
     "smbb" variant (see create_ENSO_controller_case.sh's refcase), so
     matching the wrong one would mean either a hard failure (both present,
-    "duplicate June" errors) or a silently-wrong background trajectory
+    "duplicate" month errors) or a silently-wrong background trajectory
     (only the other one present).
     """
     pattern = os.path.join(sst_dir, f"*{variant}*.{member}.pop.h.SST.*.nc")
@@ -57,9 +68,9 @@ def nominal_year_month(ds: xr.Dataset, index: int) -> tuple:
     """The calendar (year, month) a time step's monthly mean represents.
 
     POP timestamps a monthly mean at the *end* of its averaging interval
-    (e.g. a June mean's raw `time` value can fall on July 1), not within
-    the averaged month itself — using the raw `time` coordinate's month
-    directly would silently select the wrong month. `time_bound` (CF
+    (e.g. a November mean's raw `time` value can fall on December 1), not
+    within the averaged month itself — using the raw `time` coordinate's
+    month directly would silently select the wrong month. `time_bound` (CF
     `bounds` attribute on `time`) gives the true [start, end) interval;
     its start always falls exactly on the 1st of the actual averaged
     month regardless of the `time` stamp convention. Fall back to the raw
@@ -75,20 +86,26 @@ def nominal_year_month(ds: xr.Dataset, index: int) -> tuple:
 
 def build_climatology(sst_dir: str, member: str, variant: str, year: int,
                        output_path: str) -> None:
-    start_year = year - BASELINE_YEARS
-    end_year = year - 1
-    expected_years = set(range(start_year, end_year + 1))
+    first_season = year - BASELINE_YEARS
+    last_season = year - 1
+    expected_months = {
+        year_month
+        for season in range(first_season, last_season + 1)
+        for year_month in season_months(season)
+    }
 
-    files = find_sst_files(sst_dir, member, variant, start_year, end_year)
+    # Seasons [first_season, last_season] span December first_season through
+    # February `year`.
+    files = find_sst_files(sst_dir, member, variant, first_season, year)
     if not files:
         raise ValueError(
             f"no SST tseries files found for member {member} (variant {variant}) "
-            f"covering {start_year}-{end_year} in {sst_dir}"
+            f"covering {first_season}-{year} in {sst_dir}"
         )
 
     time_coder = xr.coders.CFDatetimeCoder(use_cftime=True)
 
-    june_by_year = {}
+    sst_by_month = {}
     area = lat = lon = None
     for path in files:
         with xr.open_dataset(path, decode_times=time_coder) as ds:
@@ -96,28 +113,31 @@ def build_climatology(sst_dir: str, member: str, variant: str, year: int,
             if "z_t" in sst.dims:
                 sst = sst.isel(z_t=0)
             for i in range(ds.sizes["time"]):
-                nominal_year, nominal_month = nominal_year_month(ds, i)
-                if nominal_month != 6 or nominal_year not in expected_years:
+                year_month = nominal_year_month(ds, i)
+                if year_month not in expected_months:
                     continue
-                if nominal_year in june_by_year:
+                if year_month in sst_by_month:
                     raise ValueError(
-                        f"duplicate June {nominal_year} value found across SST files "
-                        f"for member {member} — overlapping tseries files in {sst_dir}?"
+                        f"duplicate SST value for {year_month[0]:04d}-{year_month[1]:02d} "
+                        f"across SST files for member {member} — overlapping tseries "
+                        f"files in {sst_dir}?"
                     )
-                june_by_year[nominal_year] = sst.isel(time=i).values.copy()
+                sst_by_month[year_month] = sst.isel(time=i).values.copy()
             if area is None:
                 area = ds["TAREA"].values.copy()
                 lat = ds["TLAT"].values.copy()
                 lon = ds["TLONG"].values.copy()
 
-    missing = sorted(expected_years - june_by_year.keys())
+    missing = sorted(expected_months - sst_by_month.keys())
     if missing:
+        missing_labels = [f"{y:04d}-{m:02d}" for y, m in missing]
         raise ValueError(
-            f"missing June SST data for years {missing} (member {member}, "
-            f"baseline {start_year}-{end_year}, searched {len(files)} file(s) in {sst_dir})"
+            f"missing DJF SST data for months {missing_labels} (member {member}, "
+            f"baseline DJF seasons {first_season}-{last_season}, searched "
+            f"{len(files)} file(s) in {sst_dir})"
         )
 
-    stacked = np.stack([june_by_year[y] for y in sorted(june_by_year)], axis=0)
+    stacked = np.stack([sst_by_month[ym] for ym in sorted(sst_by_month)], axis=0)
     climatological_sst = stacked.mean(axis=0)
 
     out = xr.Dataset(
@@ -145,7 +165,9 @@ def main() -> None:
     parser.add_argument("--forcing-variant", default="smbb",
                          help="substring narrowing the case-name prefix, e.g. "
                               "'smbb' vs 'cmip6' (default: smbb)")
-    parser.add_argument("--year", type=int, required=True)
+    parser.add_argument("--year", type=int, required=True,
+                         help="DJF season year Y (Dec Y, Jan-Feb Y+1) to build the "
+                              "climatology for")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
 
